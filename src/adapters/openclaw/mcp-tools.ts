@@ -191,16 +191,9 @@ export const OPENCLAW_TOOL_DEFS: readonly OpenClawToolDef[] = [
     },
     execute: cliRedirect("ctx_doctor"),
   },
-  {
-    name: "ctx_upgrade",
-    description: "Upgrade context-mode to the latest version.",
-    parameters: {
-      type: "object",
-      properties: {},
-      additionalProperties: true,
-    },
-    execute: cliRedirect("ctx_upgrade"),
-  },
+  // `ctx_upgrade` intentionally omitted for local/offline install: upstream's
+  // fallback path clones the upstream GitHub repo and rebuilds over this
+  // install, which would overwrite the risk-behavior removals made here.
   {
     name: "ctx_purge",
     description:
