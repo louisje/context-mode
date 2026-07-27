@@ -16,9 +16,8 @@
 
 import * as p from "@clack/prompts";
 import color from "picocolors";
-import { execFileSync, execSync, execFile as nodeExecFile, type ExecSyncOptions } from "node:child_process";
+import { execFileSync, execSync, type ExecSyncOptions } from "node:child_process";
 import { readFileSync, writeFileSync, cpSync, accessSync, existsSync, readdirSync, rmSync, closeSync, openSync, chmodSync, mkdirSync, lstatSync, realpathSync, statSync, constants } from "node:fs";
-import { request as httpsRequest } from "node:https";
 import { resolve, dirname, join, sep, basename, isAbsolute } from "node:path";
 import { tmpdir, devNull, homedir } from "node:os";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -49,23 +48,6 @@ import { discoverSiblingMcpPids, killSiblingMcpServers } from "./util/sibling-mc
 import { healPluginJsonMcpServers, sweepStaleMcpJson } from "../scripts/heal-installed-plugins.mjs";
 // @ts-expect-error — JS module, no TS declarations
 import { detectWindowsVsYear } from "../scripts/heal-better-sqlite3.mjs";
-// Private 16-LOC copy of browserOpenArgv. Canonical version lives in src/server.ts;
-// duplicated here so the cli bundle does not pull server.ts top-level boot side effects.
-// Keep in sync — pure data, no I/O.
-function browserOpenArgv(
-  url: string,
-  platform: NodeJS.Platform,
-): readonly { cmd: string; args: readonly string[] }[] {
-  if (platform === "darwin") return [{ cmd: "open", args: [url] }];
-  if (platform === "win32") {
-    return [{ cmd: "cmd", args: ["/c", "start", "", url] }];
-  }
-  return [
-    { cmd: "xdg-open", args: [url] },
-    { cmd: "sensible-browser", args: [url] },
-  ];
-}
-
 // ── Adapter imports ──────────────────────────────────────
 import { detectPlatform, getAdapter } from "./adapters/detect.js";
 import { isInProcessPluginPlatform } from "./adapters/types.js";
@@ -249,8 +231,6 @@ if (args[0] === "--help" || args[0] === "-h" || args[0] === "help") {
   });
 } else if (args[0] === "hook") {
   hookDispatch(args[1], args[2]);
-} else if (args[0] === "insight") {
-  insight();
 } else if (args[0] === "statusline") {
   // Status line implementation lives in bin/statusline.mjs to keep it
   // dependency-free and fast. Forward stdin and exit with its result.
@@ -310,35 +290,6 @@ export function npmExec(command: string, opts: Record<string, unknown> = {}): vo
  * tests; default is `child_process.execFile` (callback form, fire-and-
  * forget).
  */
-export type ExecFileFn = (
-  file: string,
-  args: readonly string[],
-  opts?: Record<string, unknown>,
-) => unknown;
-
-export function openInBrowser(
-  url: string,
-  platform: NodeJS.Platform = process.platform,
-  runner: ExecFileFn = nodeExecFile as unknown as ExecFileFn,
-): void {
-  const opts = { stdio: "ignore" as const };
-  const hint = () =>
-    console.error(`\nCould not auto-open browser. Open manually: ${url}`);
-
-  // Platform→argv mapping is canonical in src/server.ts; mirrored privately
-  // above to avoid pulling server boot side effects into the cli bundle.
-  const attempts = browserOpenArgv(url, platform);
-  let opened = false;
-  for (const { cmd, args } of attempts) {
-    try {
-      runner(cmd, args as string[], opts);
-      opened = true;
-      break;
-    } catch { /* try next fallback */ }
-  }
-  if (!opened) hint();
-}
-
 function defaultPluginRoot(): string {
   const __filename = fileURLToPath(import.meta.url);
   const __dirname = dirname(__filename);
@@ -382,30 +333,8 @@ function getLocalVersion(): string {
 }
 
 async function fetchLatestVersion(): Promise<string> {
-  // Use node:https instead of global fetch to avoid a Windows libuv assertion
-  // (UV_HANDLE_CLOSING) caused by undici's connection-pool background threads
-  // racing with process.exit() teardown on Node.js v24+.
-  return new Promise((resolve) => {
-    const req = httpsRequest(
-      "https://registry.npmjs.org/context-mode/latest",
-      { headers: { Connection: "close" } },
-      (res) => {
-        let raw = "";
-        res.on("data", (chunk: Buffer) => { raw += chunk; });
-        res.on("end", () => {
-          try {
-            const data = JSON.parse(raw) as { version?: string };
-            resolve(data.version ?? "unknown");
-          } catch {
-            resolve("unknown");
-          }
-        });
-      },
-    );
-    req.on("error", () => resolve("unknown"));
-    req.setTimeout(5000, () => { req.destroy(); resolve("unknown"); });
-    req.end();
-  });
+  // Disabled for local/offline install: no outbound network calls to npm registry.
+  return Promise.resolve("unknown");
 }
 
 /* -------------------------------------------------------
@@ -1213,19 +1142,8 @@ async function doctor(): Promise<number> {
   return 0;
 }
 
-/* -------------------------------------------------------
- * Insight — hosted analytics dashboard
- * ------------------------------------------------------- */
-
-// Insight pivoted from a locally-built dashboard to the hosted product at
-// context-mode.com/insight (the landing page is the single source of truth).
-// The command now just opens that URL in the default browser.
-async function insight() {
-  const url = "https://context-mode.com/insight";
-  console.log(`\n  context-mode Insight\n  ${url}\n`);
-  // Open browser — execFile with arg array, no shell interpolation.
-  openInBrowser(url);
-}
+// `insight` command disabled for local/offline install: upstream opened a
+// hosted third-party dashboard (context-mode.com/insight) in the browser.
 
 /* -------------------------------------------------------
  * Upgrade — adapter-aware hook configuration

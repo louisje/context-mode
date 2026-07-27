@@ -7,7 +7,6 @@ import { spawnSync, type SpawnSyncOptions, type SpawnSyncReturns } from "node:ch
 import { join, dirname, resolve, sep, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir, tmpdir, cpus, platform } from "node:os";
-import { request as httpsRequest } from "node:https";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { z } from "zod";
 import { PolyglotExecutor } from "./executor.js";
@@ -777,26 +776,9 @@ let _lastBurstStart = 0;
 const VERSION_BURST_SIZE = 3;
 const VERSION_SILENT_MS = 60 * 60 * 1000; // 1 hour
 
+// Disabled for local/offline install: no outbound network calls to npm registry.
 async function fetchLatestVersion(): Promise<string> {
-  return new Promise((res) => {
-    const req = httpsRequest(
-      "https://registry.npmjs.org/context-mode/latest",
-      { headers: { Connection: "close" } },
-      (resp) => {
-        let raw = "";
-        resp.on("data", (chunk: Buffer) => { raw += chunk; });
-        resp.on("end", () => {
-          try {
-            const data = JSON.parse(raw) as { version?: string };
-            res(data.version ?? "unknown");
-          } catch { res("unknown"); }
-        });
-      },
-    );
-    req.on("error", () => res("unknown"));
-    req.setTimeout(5000, () => { req.destroy(); res("unknown"); });
-    req.end();
-  });
+  return "unknown";
 }
 
 function getUpgradeHint(): string {
@@ -4806,43 +4788,10 @@ export function killProcessOnPort(
   return result;
 }
 
-// ── ctx-insight: open the hosted Insight dashboard ───────────────────────────
-// Insight pivoted from a locally-built dashboard to the hosted B2B product at
-// context-mode.com/insight (the landing page is the single source of truth).
-// The tool now simply opens that URL in the user default browser via the same
-// cross-platform helper (openBrowserSync) used elsewhere.
-const INSIGHT_URL = "https://context-mode.com/insight";
-
-server.registerTool(
-  "ctx_insight",
-  {
-    title: "Open Insight Dashboard",
-    // #846: opens a hosted dashboard URL in the browser — an external side
-    // effect (open world), not a read-only query; safe to repeat.
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: true,
-    },
-    description:
-      "Opens the context-mode Insight dashboard (https://context-mode.com/insight) in your " +
-      "default browser — a dashboard launcher for the hosted analytics layer, not a Q&A engine. " +
-      "Insight surfaces per-engineer productive rate, retry waste, blocker detection, and " +
-      "role-narrowed views for CTO, EM, IC, CISO, FinOps, and DevOps. " +
-      "For natural-language queries over your indexed content, use ctx_search.",
-    inputSchema: z.object({}),
-  },
-  async () => {
-    const open = openBrowserSync(INSIGHT_URL);
-    const text = open.ok
-      ? `Opening Insight in your browser: ${INSIGHT_URL}`
-      : `Could not auto-open your browser (${open.reason}).\nOpen Insight manually: ${INSIGHT_URL}`;
-    return trackResponse("ctx_insight", {
-      content: [{ type: "text" as const, text }],
-    });
-  },
-);
+// ── ctx-insight: disabled for local/offline install ──────────────────────────
+// Upstream registers a tool here that opens https://context-mode.com/insight
+// (a hosted third-party dashboard) in the user's browser. Removed entirely so
+// no tool in this build can trigger an outbound browser navigation.
 
 // ─────────────────────────────────────────────────────────
 // Server startup

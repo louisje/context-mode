@@ -463,79 +463,12 @@ if (!process.env.VITEST) {
 // Ensure native dependencies + ABI compatibility (shared with hooks via ensure-deps.mjs)
 // ensure-deps handles better-sqlite3 install + ABI cache/rebuild automatically (#148, #203)
 import "./hooks/ensure-deps.mjs";
-// Pure-JS runtime deps used only by `ctx_fetch_and_index` (HTML → Markdown
-// pipeline runs in a sandboxed subprocess that `require.resolve()`s these at
-// call time). Plugin distributions that bypass `npm install` — most notably
-// codex's marketplace, which git-clones into `~/.codex/plugins/cache/<pkg>/`
-// without installing dependencies — land here with no `node_modules/`.
-//
-// Before #634: synchronous `execSync("npm install …")` per package
-// (turndown + turndown-plugin-gfm + @mixmark-io/domino) blocked MCP boot
-// for ~15–25s cold. Codex's per-MCP `startup_timeout_sec` is 30s, so on
-// any host where its prewarm + DNS already eats a few seconds the timer
-// fires before context-mode replies to `initialize` and the MCP child is
-// dropped with "MCP client for `context-mode` timed out after 30 seconds".
-//
-// Fix: spawn each `npm install` detached + unref'd so it runs in the
-// background while the MCP server proceeds with its handshake. The deps
-// land asynchronously, well before any LLM-driven `ctx_fetch_and_index`
-// call can plausibly fire. If a user invokes that tool faster than the
-// install completes, the subprocess's own `require.resolve("turndown")`
-// failure surfaces a typed error to the caller — same posture as any
-// other missing-runtime-dep situation in that code path.
-{
-  const NPM_INSTALL_BG_PKGS = ["turndown", "turndown-plugin-gfm", "@mixmark-io/domino"];
-  const IS_WIN32 = process.platform === "win32";
-  const NPM_BIN = IS_WIN32 ? "npm.cmd" : "npm";
-  const NPM_FLAGS = ["--no-package-lock", "--no-save", "--silent", "--no-audit", "--no-fund"];
-  // #861: on Windows the npm shim is `npm.cmd`, which needs `shell: true` to
-  // run — but Node DROPS the `cwd` option when `shell: true`, so the spawned
-  // cmd.exe inherits an arbitrary working dir (C:\Windows under Claude Code).
-  // `npm install` then tries to create `C:\Windows\node_modules` → EPERM on
-  // every boot, and a cmd.exe window flashes each time. Prefer running npm's
-  // own CLI through node directly (no `.cmd` shim, no shell): `shell: false`
-  // honors `cwd` and `windowsHide` suppresses the console window. Fall back to
-  // the shim only when npm-cli.js can't be located, so a working host (e.g. a
-  // POSIX layout where npm-cli.js isn't beside node) can never regress.
-  const NPM_CLI_JS = resolve(dirname(process.execPath), "node_modules", "npm", "bin", "npm-cli.js");
-  const useNodeCli = existsSync(NPM_CLI_JS);
-  for (const pkg of NPM_INSTALL_BG_PKGS) {
-    if (existsSync(resolve(__dirname, "node_modules", pkg))) continue;
-    try {
-      const child = useNodeCli
-        ? spawn(process.execPath, [NPM_CLI_JS, "install", pkg, ...NPM_FLAGS], {
-            cwd: __dirname,
-            stdio: "ignore",
-            detached: true,
-            shell: false,
-            windowsHide: true,
-          })
-        : spawn(NPM_BIN, ["install", pkg, ...NPM_FLAGS], {
-            cwd: __dirname,
-            stdio: "ignore",
-            detached: true,
-            // npm on Windows ships as a `.cmd` shim — must go through cmd.exe.
-            shell: IS_WIN32,
-            windowsHide: true,
-          });
-      // #861: this EPERM was invisible for months behind stdio:"ignore" + an
-      // empty error handler. Surface both spawn failures and non-zero exits.
-      child.on("error", (err) => {
-        process.stderr.write(
-          `[context-mode] background install of ${pkg} failed to spawn: ${err?.message ?? err}\n`,
-        );
-      });
-      child.on("exit", (code) => {
-        if (code) {
-          process.stderr.write(
-            `[context-mode] background install of ${pkg} exited with code ${code}\n`,
-          );
-        }
-      });
-      child.unref();
-    } catch { /* best effort — never block MCP boot */ }
-  }
-}
+// Disabled for local/offline install: upstream spawns background
+// `npm install turndown turndown-plugin-gfm @mixmark-io/domino` here (used
+// only by `ctx_fetch_and_index`'s HTML→Markdown pipeline). No outbound network
+// calls to the npm registry happen at MCP boot in this build. If those
+// packages are missing, `ctx_fetch_and_index` will surface a typed
+// require.resolve() error instead of silently fetching them.
 
 // Self-heal: create CLI shim if cli.bundle.mjs is missing (marketplace installs)
 if (!existsSync(resolve(__dirname, "cli.bundle.mjs")) && existsSync(resolve(__dirname, "build", "cli.js"))) {
