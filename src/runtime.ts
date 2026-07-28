@@ -141,13 +141,44 @@ function bunCommand(): string {
   for (const p of bunFallbackPaths()) {
     if (existsSync(p)) return p;
   }
-  // Bare name only if PATH resolution confirms it. On Windows this is
-  // typically a .cmd shim — the executor's needsShell list (which now
-  // includes "bun" — see #506) ensures shell:true so cmd.exe can resolve it.
-  if (commandExists("bun")) return "bun";
+  // PATH resolution confirms bun exists, but a bare "bun" string baked into
+  // hooks.json only resolves if the hook's spawn-time PATH matches ours —
+  // fragile under GUI-launched processes and momentarily broken package-
+  // manager symlinks (Homebrew unlink/relink during `brew upgrade`, #900).
+  // Resolve the real absolute path once here (POSIX: `command -v`, Windows:
+  // `where`, first non-WindowsApps hit) so the baked command is immune to
+  // PATH differences at hook-spawn time. Bare "bun" remains the final
+  // fallback if resolution unexpectedly yields nothing.
+  if (commandExists("bun")) {
+    const resolved = resolveCommandPath("bun");
+    if (resolved) return resolved;
+    return "bun";
+  }
   // Synthetic last-resort path for diagnostics/error messages.
   const home = process.env.HOME ?? process.env.USERPROFILE ?? "";
   return isWindows ? `${home}\\.bun\\bin\\bun.exe` : `${home}/.bun/bin/bun`;
+}
+
+/**
+ * Resolve a command name to its absolute path via the shell's own lookup
+ * (`command -v` on POSIX, `where` on Windows), so the returned path is
+ * immune to PATH differences between this process and the hook's spawn-time
+ * environment. Returns null on any failure — callers must fall back to the
+ * bare command name (#900).
+ */
+function resolveCommandPath(cmd: string): string | null {
+  try {
+    if (isWindows) {
+      const out = execSync(`where ${cmd}`, { encoding: "utf-8", stdio: "pipe" });
+      const hits = out.trim().split(/\r?\n/).map((p) => p.trim()).filter(Boolean);
+      const real = hits.find((p) => !/\\Microsoft\\WindowsApps\\/i.test(p));
+      return real && existsSync(real) ? real : null;
+    }
+    const out = execSync(`command -v ${cmd}`, { encoding: "utf-8", stdio: "pipe" }).trim();
+    return out && existsSync(out) ? out : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Fallback paths where Bun may be installed but not on PATH. */
