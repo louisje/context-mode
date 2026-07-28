@@ -224,70 +224,6 @@ if (cacheMatch) {
   }
 }
 
-// ── Self-heal Layer 3 + 4: installed_plugins.json registry repair ──
-// v1.0.113 hotfix follow-up. /ctx-upgrade can leave installed_plugins.json
-// with two distinct kinds of poison:
-//   HEAL 3: per-entry `version` drifts away from the actual cache dir's
-//           plugin.json `version` field. Claude Code's plugin loader then
-//           rejects the entry as a manifest mismatch and silently
-//           disconnects context-mode.
-//   HEAL 4: top-level `enabledPlugins[<key>]` is missing or emptied.
-//           Claude Code skips disabled plugins, so MCP never starts and
-//           the user has no /ctx-upgrade escape hatch.
-// Logic is shared verbatim with scripts/postinstall.mjs (single source of
-// truth) so users who fix themselves via `npm install -g context-mode`
-// follow the exact same code path. Best-effort, never blocks MCP boot.
-try {
-  const { healInstalledPlugins, healSettingsEnabledPlugins, healPluginJsonMcpServers, sweepStaleMcpJson } =
-    await import("./scripts/heal-installed-plugins.mjs");
-  const pluginKey = "context-mode@context-mode";
-  const claudeConfigDir = resolveClaudeConfigDir();
-  const registryPath = resolve(claudeConfigDir, "plugins", "installed_plugins.json");
-  const pluginCacheRoot = resolve(claudeConfigDir, "plugins", "cache");
-  const settingsPath = resolve(claudeConfigDir, "settings.json");
-  try { healInstalledPlugins({ registryPath, pluginCacheRoot, pluginKey }); }
-  catch { /* best effort */ }
-  // v1.0.116: Claude Code's plugin loader reads settings.json.enabledPlugins
-  // (NOT installed_plugins.json) — heal that one too so /ctx-upgrade-induced
-  // disable state is repaired before next /reload-plugins.
-  try { healSettingsEnabledPlugins({ settingsPath, pluginKey }); }
-  catch { /* best effort */ }
-  // v1.0.119 — Layer 5b (Issue #523): heal .claude-plugin/plugin.json's
-  // mcpServers["context-mode"].args[0] when /ctx-upgrade left a tmpdir-prefixed
-  // path baked in. Iterates EVERY installed cache entry's installPath so
-  // multi-version installs all self-recover. Each call is independently wrapped
-  // because one poisoned entry must not block heals on the others. Best effort.
-  try {
-    if (existsSync(registryPath)) {
-      const ip = JSON.parse(readFileSync(registryPath, "utf-8"));
-      const entries = (ip && ip.plugins && ip.plugins[pluginKey]) || [];
-      if (Array.isArray(entries)) {
-        for (const entry of entries) {
-          const installPath = entry && entry.installPath;
-          if (typeof installPath !== "string" || !installPath) continue;
-          try {
-            healPluginJsonMcpServers({
-              pluginRoot: installPath,
-              pluginCacheRoot,
-              pluginKey,
-            });
-          } catch { /* best effort — per-entry */ }
-        }
-      }
-    }
-  } catch { /* best effort */ }
-  // Issue #609 — Layer 5c (replaces v1.0.122 healMcpJsonArgs per-entry loop):
-  // sweep stale `.mcp.json` files from every per-version cache dir. cli.ts
-  // no longer writes `.mcp.json` (PR fix for #609), so the only `.mcp.json`
-  // files in the cache are stale carry-forwards from earlier installs or
-  // Claude Code's plugin manager copying them between version dirs. Removing
-  // them blocks the previous-version-carry replay vector at MCP boot.
-  // One sweep per boot — bounded, idempotent, best-effort.
-  try {
-    sweepStaleMcpJson({ pluginCacheRoot, pluginKey });
-  } catch { /* best effort */ }
-} catch { /* best effort — never block MCP boot */ }
-
 // ── Self-heal Layer 4: Deploy global SessionStart hook + register in settings.json ──
 // This hook lives outside the plugin directory (~/.claude/hooks/) so it works
 // even when the plugin cache is completely broken. It creates symlinks for any
@@ -302,7 +238,7 @@ try {
 //   - On every boot we self-heal stale "/opt/homebrew/Cellar/node/<ver>/..." paths
 //     left behind by older versions of this code.
 try {
-  const { buildHookCommand, selfHealCacheHealHook, ensureShebangAndExecBit } =
+  const { ensureShebangAndExecBit } =
     await import("./hooks/cache-heal-utils.mjs");
 
   // #577: honor $CLAUDE_CONFIG_DIR — without this, Claude Code spawns hooks
@@ -384,45 +320,11 @@ try{
     try { ensureShebangAndExecBit(healHookPath); } catch { /* best effort */ }
   }
 
-  // Register the hook in $CLAUDE_CONFIG_DIR/settings.json (Claude Code doesn't auto-discover hook files).
-  // #577: must follow the same dir resolution as globalHooksDir above.
-  const settingsPath = resolve(claudeConfigDir, "settings.json");
-  if (existsSync(settingsPath)) {
-    const settings = JSON.parse(readFileSync(settingsPath, "utf-8"));
-    const hooks = settings.hooks ?? {};
-    const sessionStart = hooks.SessionStart ?? [];
-    const alreadyRegistered = sessionStart.some((h) =>
-      h.hooks?.some((hh) => hh.command?.includes("context-mode-cache-heal")),
-    );
-    if (!alreadyRegistered) {
-      sessionStart.push({
-        hooks: [
-          {
-            type: "command",
-            command: buildHookCommand({
-              scriptPath: healHookPath,
-              platform: process.platform,
-              nodePath: process.execPath,
-            }),
-          },
-        ],
-      });
-      hooks.SessionStart = sessionStart;
-      settings.hooks = hooks;
-      writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n", "utf-8");
-    }
-
-    // Self-heal: rewrite an existing cache-heal hook command if it points at
-    // a node binary that no longer exists (Brew node upgrade scenario).
-    try {
-      selfHealCacheHealHook({
-        settingsPath,
-        scriptPath: healHookPath,
-        platform: process.platform,
-        nodePath: process.execPath,
-      });
-    } catch { /* best effort */ }
-  }
+  // Registration into $CLAUDE_CONFIG_DIR/settings.json's SessionStart hooks
+  // is intentionally disabled — the user manages the cache/symlink self-heal
+  // path themselves. The heal script is still deployed to ~/.claude/hooks/
+  // above (harmless if unused), but start.mjs no longer writes or rewrites
+  // settings.json's `hooks.SessionStart` array.
 } catch { /* best effort */ }
 
 // ── Self-heal Layer 5: Windows hooks.json + plugin.json normalization (#378) ──
@@ -475,21 +377,6 @@ if (!existsSync(resolve(__dirname, "cli.bundle.mjs")) && existsSync(resolve(__di
   const shimPath = resolve(__dirname, "cli.bundle.mjs");
   writeFileSync(shimPath, '#!/usr/bin/env node\nawait import("./build/cli.js");\n');
   if (process.platform !== "win32") chmodSync(shimPath, 0o755);
-}
-
-// ── Self-heal partial install from marketplace clone ──
-// Runs BEFORE the Algo-D4 integrity check so a fixable partial install
-// gets repaired rather than just reported. Best-effort and idempotent;
-// the integrity check below remains the authoritative gate that decides
-// whether boot proceeds. See hooks/heal-partial-install.mjs for the
-// failure-mode description and module contract.
-if (!process.env.VITEST) {
-  try {
-    const { healPartialInstallFromMarketplace } = await import(
-      "./hooks/heal-partial-install.mjs"
-    );
-    healPartialInstallFromMarketplace({ pluginRoot: __dirname });
-  } catch { /* best effort, never block boot */ }
 }
 
 // ── Algo-D4: plugin cache integrity check ──

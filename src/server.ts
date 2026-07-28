@@ -2,9 +2,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { createRequire } from "node:module";
-import { existsSync, unlinkSync, readdirSync, readFileSync, writeFileSync, writeSync, renameSync, rmSync, mkdirSync, statSync, symlinkSync, lstatSync, realpathSync } from "node:fs";
+import { existsSync, unlinkSync, readdirSync, readFileSync, writeFileSync, writeSync, renameSync, rmSync, statSync, lstatSync, realpathSync } from "node:fs";
 import { spawnSync, type SpawnSyncOptions, type SpawnSyncReturns } from "node:child_process";
-import { join, dirname, resolve, sep, isAbsolute } from "node:path";
+import { join, dirname, resolve, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 import { homedir, tmpdir, cpus, platform } from "node:os";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -817,59 +817,10 @@ function shouldShowVersionWarning(): boolean {
   return true;
 }
 
-// ── Self-heal Layer 2: Mid-session registry heal (anthropics/claude-code#46915) ──
-// Runs once on first tool call. If Claude Code auto-updated the registry mid-session,
-// hooks break because CLAUDE_PLUGIN_ROOT points to a deleted directory. We create a
-// symlink from the broken path to our actual directory so hooks recover.
-let _cacheHealDone = false;
-function healCacheMidSession(): void {
-  if (_cacheHealDone) return;
-  _cacheHealDone = true;
-  try {
-    // Issue #460 round-3: honor $CLAUDE_CONFIG_DIR so users who relocate
-    // their CC config root don't have plugin cache healing operate against
-    // the wrong tree (and silently miss dangling-symlink cleanup).
-    const claudeRoot = resolveClaudeConfigDir();
-    const ipPath = resolve(claudeRoot, "plugins", "installed_plugins.json");
-    if (!existsSync(ipPath)) return;
-    const ip = JSON.parse(readFileSync(ipPath, "utf-8"));
-    const cacheRoot = resolve(claudeRoot, "plugins", "cache");
-    // Issue #795: canonicalize cacheRoot so the traversal guard works when
-    // ~/.claude is a symlink to another volume.  path.resolve() does not
-    // dereference symlinks, so installPath values stored as physical paths
-    // (e.g. /Volumes/SSD/.../plugins/cache/...) would fail the startsWith
-    // check against a symlink-path cacheRoot (/Users/me/.claude/...).
-    // realpathSync follows the symlink chain to the canonical location.
-    let cacheRootCanon: string;
-    try { cacheRootCanon = realpathSync(cacheRoot); }
-    catch { cacheRootCanon = cacheRoot; }
-    // Plugin root: build/ for tsc, plugin root for bundle
-    const pluginRoot = getPackageRoot();
-    for (const [key, entries] of Object.entries((ip.plugins ?? {}) as Record<string, Array<{ installPath?: string }>>)) {
-      if (key !== "context-mode@context-mode") continue;
-      for (const entry of entries) {
-        const rp = entry.installPath;
-        if (!rp || existsSync(rp)) continue;
-        // Path traversal guard (canonical comparison — see #795)
-        if (!resolve(rp).startsWith(cacheRootCanon + sep)) continue;
-        // Remove dangling symlink
-        try { if (lstatSync(rp).isSymbolicLink()) unlinkSync(rp); } catch {}
-        const parent = dirname(rp);
-        if (!existsSync(parent)) mkdirSync(parent, { recursive: true });
-        if (existsSync(pluginRoot)) {
-          symlinkSync(pluginRoot, rp, process.platform === "win32" ? "junction" : undefined);
-        }
-      }
-    }
-  } catch { /* best effort */ }
-}
-
 function trackResponse(toolName: string, response: ToolResult): ToolResult {
   // #854: a response is activity too — refresh the bridge-child idle clock so a
   // chatty/streaming call keeps its server alive even between inbound frames.
   noteMcpActivity();
-  // Mid-session cache heal — one-shot, first tool call
-  healCacheMidSession();
   // Prepend version outdated warning if needed
   if (shouldShowVersionWarning() && response.content.length > 0) {
     const hint = getUpgradeHint();

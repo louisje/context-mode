@@ -42,10 +42,6 @@ import { ContentStore } from "./store.js";
 import { readToolDenyPatterns, evaluateFilePath } from "./security.js";
 // v1.0.128 — Issue #559 sibling MCP kill helpers (see PR-559-560-FIX-DESIGN.md).
 import { discoverSiblingMcpPids, killSiblingMcpServers } from "./util/sibling-mcp.js";
-// v1.0.119 — Issue #523 Layer 5 heal: post-bump assertion on .claude-plugin/plugin.json
-// mcpServers args. Single source of truth shared with start.mjs HEAL block + postinstall.
-// @ts-expect-error — JS module, no TS declarations
-import { healPluginJsonMcpServers, sweepStaleMcpJson } from "../scripts/heal-installed-plugins.mjs";
 // @ts-expect-error — JS module, no TS declarations
 import { detectWindowsVsYear } from "../scripts/heal-better-sqlite3.mjs";
 // ── Adapter imports ──────────────────────────────────────
@@ -1365,42 +1361,6 @@ async function upgrade(opts?: { platform?: string }) {
       // The post-bump cache-sweep below removes any pre-existing copies so
       // the previous-version-carry vector cannot replay.
 
-      // Issue #711 + #414 split: normalize hooks.json (only) here.
-      //
-      //   - plugin.json must NOT be normalized during /ctx-upgrade — Claude
-      //     Code carries it forward into new versioned cache dirs on
-      //     auto-update, so baked absolute paths go stale (#711).
-      //   - hooks/hooks.json MUST be normalized during /ctx-upgrade on
-      //     Windows + Git Bash — Claude Code fires SessionStart / PreToolUse
-      //     BEFORE the MCP server boots, so the unresolved
-      //     `${CLAUDE_PLUGIN_ROOT}` placeholder yields MODULE_NOT_FOUND for
-      //     the first hook fire after upgrade (#414, originally wired in
-      //     13d1342 / #528).
-      //
-      // The narrow `normalizeHooksJsonOnly` helper preserves both invariants.
-      // start.mjs continues to call the full `normalizeHooksOnStartup` at the
-      // next MCP boot to re-heal plugin.json against the live __dirname.
-      try {
-        // #738: pass the resolved Bun ≥1.0 path so /ctx-upgrade's hooks.json
-        // rewrite gains the same cold-start win as the boot-time rewrite.
-        // Probe failures fall through to nodePath default.
-        let jsRuntimePath: string | undefined;
-        try {
-          const { resolveHookRuntime } = await import("./runtime.js");
-          const r = resolveHookRuntime();
-          if (r.isBun) jsRuntimePath = r.path;
-        } catch { /* best effort */ }
-        const mod: { normalizeHooksJsonOnly: (opts: { pluginRoot: string; nodePath: string; jsRuntimePath?: string; platform: string }) => void } =
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (await import("../hooks/normalize-hooks.mjs" as any)) as any;
-        mod.normalizeHooksJsonOnly({
-          pluginRoot,
-          nodePath: process.execPath,
-          jsRuntimePath,
-          platform: process.platform,
-        });
-      } catch { /* best effort — never block upgrade */ }
-
       // Issue #710 — Layer 1: rewrite stale shell-snapshot PATH entries.
       //
       // Claude Code's per-session shell snapshot
@@ -1492,78 +1452,6 @@ async function upgrade(opts?: { platform?: string }) {
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : String(err);
         throw new Error(`Registry consistency check failed: ${message}`);
-      }
-
-      // v1.0.119 — Issue #523 — Layer 5 heal: assert .claude-plugin/plugin.json's
-      // mcpServers["context-mode"].args[0] is the literal ${CLAUDE_PLUGIN_ROOT}/start.mjs
-      // placeholder, not a tmpdir-prefixed absolute path. cli.ts already wrote .mcp.json
-      // with the placeholder (#411 fix), but plugin.json was never touched here — and
-      // start.mjs's normalize-hooks (Windows + #378) can bake in absolute paths that
-      // become stale across upgrades. We call the shared heal twice: first call cleans
-      // any drift; second call MUST return healed:[] or we throw. Single source of
-      // truth shared with start.mjs HEAL block + postinstall.
-      try {
-        const pluginCacheRoot = resolve(resolveClaudeConfigDir(), "plugins", "cache");
-        const pluginKey = "context-mode@context-mode";
-        const firstPass = healPluginJsonMcpServers({ pluginRoot, pluginCacheRoot, pluginKey });
-        if (firstPass && firstPass.error) {
-          throw new Error(firstPass.error);
-        }
-        const secondPass = healPluginJsonMcpServers({ pluginRoot, pluginCacheRoot, pluginKey });
-        if (secondPass && Array.isArray(secondPass.healed) && secondPass.healed.length > 0) {
-          throw new Error(
-            `Plugin manifest drift: plugin.json mcpServers.args still poisoned after first heal pass (healed=${secondPass.healed.join(",")})`,
-          );
-        }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        throw new Error(`plugin.json drift check failed: ${message}`);
-      }
-
-      // Issue #609 — Layer 6 replacement: sweep stale `.mcp.json` files from
-      // every per-version cache dir. Supersedes the previous healMcpJsonArgs
-      // drift-check block (v1.0.122) — that block existed because cli.ts
-      // itself wrote `.mcp.json`. With the write gone (above), the only
-      // remaining `.mcp.json` files are stale carry-forwards from earlier
-      // versions. Sweep them so Claude Code's auto-update can't replay them
-      // into a fresh version dir.
-      //
-      // Belt-and-braces: a second sweep call MUST report removed:[] or we
-      // throw — same architectural-lock pattern as the plugin.json drift
-      // check above. Single source of truth shared with start.mjs HEAL
-      // block + postinstall.
-      try {
-        const pluginCacheRoot = resolve(resolveClaudeConfigDir(), "plugins", "cache");
-        const pluginKey = "context-mode@context-mode";
-        const firstSweep = sweepStaleMcpJson({ pluginCacheRoot, pluginKey });
-        if (firstSweep && firstSweep.removed && firstSweep.removed.length > 0) {
-          p.log.info(color.dim(`  Swept ${firstSweep.removed.length} stale .mcp.json file(s) from cache`));
-        }
-        const secondSweep = sweepStaleMcpJson({ pluginCacheRoot, pluginKey });
-        if (secondSweep && Array.isArray(secondSweep.removed) && secondSweep.removed.length > 0) {
-          throw new Error(
-            `.mcp.json sweep drift: ${secondSweep.removed.length} file(s) still present after first pass`,
-          );
-        }
-      } catch (err: unknown) {
-        const message = err instanceof Error ? err.message : String(err);
-        throw new Error(`.mcp.json sweep check failed: ${message}`);
-      }
-
-      // v1.0.X — Layer 7 heal: update user-level ~/.claude.json MCP server
-      // registrations that point to old context-mode version dirs.
-      // (anthropics/claude-code#59310 workaround — see heal-installed-plugins.mjs)
-      try {
-        // @ts-expect-error — JS module, no TS declarations
-        const { healClaudeJsonMcpArgs } = await import("../scripts/heal-installed-plugins.mjs");
-        const dotClaudeJson = resolve(homedir(), ".claude.json");
-        const pluginCacheParent = resolve(resolveClaudeConfigDir(), "plugins", "cache", "context-mode", "context-mode");
-        const result = healClaudeJsonMcpArgs({ dotClaudeJsonPath: dotClaudeJson, pluginCacheParent, newPluginRoot: pluginRoot });
-        if (result.healed && result.healed.length > 0) {
-          p.log.info(color.dim("  ~/.claude.json user MCP registrations updated → " + newVersion));
-        }
-      } catch {
-        /* best effort — never block upgrade */
       }
 
       // v1.0.114 hotfix — marketplace post-pull assertion: clone (if
