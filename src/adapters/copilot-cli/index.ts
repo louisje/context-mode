@@ -321,7 +321,7 @@ export class CopilotCliAdapter extends CopilotBaseAdapter {
       ? `Copilot CLI plugin bundle hooks.json (${settingsPath})`
       : settingsPath;
     const fix = pluginRuntime
-      ? "copilot plugin install mksglu/context-mode:configs/copilot-cli"
+      ? "copilot plugin install louisje/context-mode:configs/copilot-cli"
       : "context-mode upgrade";
 
     try {

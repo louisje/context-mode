@@ -228,7 +228,7 @@ describe("CopilotCliAdapter", () => {
 
 /**
  * Guards the shipped GitHub Copilot CLI plugin bundle (configs/copilot-cli/),
- * which users install with `copilot plugin install mksglu/context-mode:configs/copilot-cli`.
+ * which users install with `copilot plugin install louisje/context-mode:configs/copilot-cli`.
  *
  * Copilot auto-discovers a plugin's components from fixed filenames (verified
  * against real marketplace plugins, github/copilot-plugins + github/awesome-copilot):

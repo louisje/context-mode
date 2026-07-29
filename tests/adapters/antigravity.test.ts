@@ -235,7 +235,7 @@ describe("AntigravityCliAdapter", () => {
     expect(adapter.checkPluginRegistration()).toMatchObject({
       check: "MCP registration",
       status: "fail",
-      fix: "agy plugin install https://github.com/mksglu/context-mode/tree/main/configs/antigravity-cli",
+      fix: "agy plugin install https://github.com/louisje/context-mode/tree/main/configs/antigravity-cli",
     });
   });
 

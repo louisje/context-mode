@@ -1,13 +1,19 @@
 {
   "name": "context-mode",
-  "version": "1.0.169",
+  "version": "1.0.169-patch0",
   "description": "OpenClaw plugin that saves 98% of your context window. Sandboxed code execution in 11 languages, FTS5 knowledge base with BM25 ranking, and intent-driven search.",
   "author": {
     "name": "Mert Koseoğlu",
     "url": "https://github.com/mksglu"
   },
-  "homepage": "https://github.com/mksglu/context-mode#readme",
-  "repository": "https://github.com/mksglu/context-mode",
+  "contributors": [
+    {
+      "name": "louisje",
+      "url": "https://github.com/louisje"
+    }
+  ],
+  "homepage": "https://github.com/louisje/context-mode#readme",
+  "repository": "https://github.com/louisje/context-mode",
   "license": "Elastic-2.0",
   "keywords": [
     "openclaw",

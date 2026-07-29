@@ -95,7 +95,7 @@ Both SessionDB and ContentStore are **multi-writer-safe**. Two processes may ope
 ### 1. Clone and install
 
 ```bash
-git clone https://github.com/mksglu/context-mode.git
+git clone https://github.com/louisje/context-mode.git
 cd context-mode
 npm install
 npm run build  # tsc compiles src/ → build/
@@ -268,7 +268,7 @@ We follow test-driven development. Every PR must include tests.
 The skill lives under `.claude/skills/context-mode-ops/` in this repo (moved from the deprecated `skills/` location in #439). Install via the direct path:
 
 ```bash
-npx skills add https://github.com/mksglu/context-mode/tree/main/.claude/skills/context-mode-ops
+npx skills add https://github.com/louisje/context-mode/tree/main/.claude/skills/context-mode-ops
 ```
 
 ### Red-Green-Refactor

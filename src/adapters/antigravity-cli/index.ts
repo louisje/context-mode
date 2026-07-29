@@ -299,7 +299,7 @@ export class AntigravityCliAdapter extends AntigravityAdapter {
       check: "MCP registration",
       status: "fail",
       message: "context-mode not found in Antigravity CLI mcpServers",
-      fix: "agy plugin install https://github.com/mksglu/context-mode/tree/main/configs/antigravity-cli",
+      fix: "agy plugin install https://github.com/louisje/context-mode/tree/main/configs/antigravity-cli",
     };
   }
 
@@ -388,8 +388,8 @@ export class AntigravityCliAdapter extends AntigravityAdapter {
         status: ok ? "pass" : "warn",
         message: ok
           ? `PreToolUse guard and PostToolUse capture configured in ${where}${stopOk ? "; best-effort Stop hook also configured" : ""}`
-          : `Antigravity CLI hooks incomplete (${missing || "none found"} missing) — MCP tools still work, but bounded routing enforcement and session capture are degraded. Run \`agy plugin install https://github.com/mksglu/context-mode/tree/main/configs/antigravity-cli\` or \`context-mode upgrade\` to repair hooks.`,
-        ...(ok ? {} : { fix: "agy plugin install https://github.com/mksglu/context-mode/tree/main/configs/antigravity-cli" }),
+          : `Antigravity CLI hooks incomplete (${missing || "none found"} missing) — MCP tools still work, but bounded routing enforcement and session capture are degraded. Run \`agy plugin install https://github.com/louisje/context-mode/tree/main/configs/antigravity-cli\` or \`context-mode upgrade\` to repair hooks.`,
+        ...(ok ? {} : { fix: "agy plugin install https://github.com/louisje/context-mode/tree/main/configs/antigravity-cli" }),
       },
     ];
   }

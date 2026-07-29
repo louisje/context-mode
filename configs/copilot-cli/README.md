@@ -4,7 +4,7 @@ One-command install of the context-mode MCP server (and routing skill) into
 GitHub Copilot CLI, with **no `context-mode upgrade` / agent call required**:
 
 ```sh
-copilot plugin install mksglu/context-mode:configs/copilot-cli
+copilot plugin install louisje/context-mode:configs/copilot-cli
 ```
 
 This registers:
