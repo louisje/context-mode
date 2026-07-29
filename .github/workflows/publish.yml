@@ -22,7 +22,6 @@ jobs:
           node-version: 22.5
           registry-url: 'https://npm.pkg.github.com'
           scope: '@louisje'
-          cache: 'npm'
 
       - name: Install dependencies
         run: npm install
