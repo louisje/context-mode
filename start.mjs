@@ -340,7 +340,14 @@ try{
 // Skip under vitest: server.test.ts spawns this script from the repo root,
 // and a mutated .claude-plugin/plugin.json poisons sibling tests that read
 // the file (cli.test.ts). VITEST is inherited by spawned subprocesses.
-if (!process.env.VITEST) {
+//
+// Skip when __dirname isn't a plugin install path (cache/ or marketplaces/):
+// covers `claude plugin marketplace add $PWD` against a dev checkout, where
+// __dirname is the git working tree itself, not a cache copy. Mirrors the
+// installed_plugins.json healer below (cacheRoot startsWith guard) — same
+// intent, reused isPluginInstallPath() so a dev checkout's hooks.json /
+// plugin.json never gets rewritten in place.
+if (!process.env.VITEST && isPluginInstallPath(__dirname)) {
   try {
     const { normalizeHooksOnStartup } = await import("./hooks/normalize-hooks.mjs");
     // #738: probe for Bun ≥1.0 and pass the resolved path so the static
