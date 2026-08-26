@@ -51,6 +51,7 @@ export function formatDecision(decision) {
         hookSpecificOutput: {
           hookEventName: "PreToolUse",
           permissionDecision: "ask",
+          permissionDecisionReason: decision.reason ?? "Action requires user confirmation",
         },
       };
 

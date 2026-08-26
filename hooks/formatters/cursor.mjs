@@ -19,6 +19,7 @@ export function formatDecision(decision) {
     case "ask":
       return {
         permission: "ask",
+        user_message: decision.reason ?? "Action requires user confirmation",
       };
 
     case "modify":

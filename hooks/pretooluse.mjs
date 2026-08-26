@@ -62,12 +62,14 @@ await runHook(async () => {
   // ─── Write rejected-approach marker for PostToolUse to pick up ───
   // PreToolUse cannot safely load SessionDB (native module loading breaks hook stdout).
   // Write a marker file instead; PostToolUse reads it and writes the event.
-  if (decision && (decision.action === "deny" || decision.action === "modify")) {
+  // "ask" is included so analytics still capture high-risk paths even when the
+  // user is given the final decision.
+  if (decision && (decision.action === "deny" || decision.action === "modify" || decision.action === "ask")) {
     try {
       const sessionId = getSessionId(input);
-      const reason = decision.action === "deny"
-        ? (decision.reason || "denied")
-        : "Redirected to context-mode sandbox";
+      const reason = decision.action === "modify"
+        ? "Redirected to context-mode sandbox"
+        : (decision.reason || "denied");
       const markerPath = resolve(tmpdir(), `context-mode-rejected-${sessionId}.txt`);
       writeFileSync(markerPath, `${tool}:${reason}`, "utf-8");
     } catch { /* best-effort — never block hook */ }

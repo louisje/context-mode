@@ -122,7 +122,7 @@ describe("Kimi Code hooks", () => {
       expect(parsed.hookSpecificOutput.updatedInput).toBeUndefined();
     });
 
-    test("returns deny JSON for WebFetch", () => {
+    test("passthrough for WebFetch — Kimi has no ask channel", () => {
       const result = runHook("pretooluse.mjs", {
         hook_event_name: "PreToolUse",
         cwd: tempDir,
@@ -132,7 +132,9 @@ describe("Kimi Code hooks", () => {
 
       expect(result.exitCode).toBe(0);
       const parsed = JSON.parse(result.stdout);
-      expect(parsed.hookSpecificOutput.permissionDecision).toBe("deny");
+      expect(parsed.hookSpecificOutput.hookEventName).toBe("PreToolUse");
+      expect(parsed.hookSpecificOutput.permissionDecision).toBeUndefined();
+      expect(parsed.hookSpecificOutput.updatedInput).toBeUndefined();
     });
 
     test("exits 0 for git commands (allowed short-output shell)", () => {

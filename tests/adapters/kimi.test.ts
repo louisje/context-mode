@@ -539,9 +539,9 @@ describe("Kimi pretooluse hook script", () => {
     expect(parsed.hookSpecificOutput).toHaveProperty("hookEventName", "PreToolUse");
   });
 
-  it("blocks WebFetch via deny response", () => {
-    // WebFetch is routed to "deny"; Bash+curl is routed to "modify" which
-    // is silently dropped by Kimi's deny-only runner.
+  it("drops ask for WebFetch — Kimi has no ask channel", () => {
+    // WebFetch is routed to "ask"; Kimi's deny-only runner drops it,
+    // so the tool proceeds as-is (passthrough).
     const hookScript = resolve(__dirname, "../../hooks/kimi/pretooluse.mjs");
     const input = JSON.stringify({
       tool_name: "WebFetch",
@@ -555,6 +555,7 @@ describe("Kimi pretooluse hook script", () => {
       timeout: 5000,
     });
     const parsed = JSON.parse(output);
-    expect(parsed.hookSpecificOutput.permissionDecision).toBe("deny");
+    expect(parsed.hookSpecificOutput.permissionDecision).toBeUndefined();
+    expect(parsed.hookSpecificOutput.hookEventName).toBe("PreToolUse");
   });
 });

@@ -5762,7 +5762,7 @@ describe("hook routing prompt-surface contract (#683 ADR-0002 + ADR-0003)", () =
   // template-literal payload up to the closing backtick — sufficient for
   // the four current call sites (L707, L738, L751, L804) and any future
   // ones a contributor adds.
-  describe("ADR-0003 CASE A: routing.mjs redirect deny reasons", () => {
+  describe("ADR-0003 CASE A: routing.mjs redirect / ask reason strings", () => {
     type CaseAString = { lineNo: number; payload: string };
 
     function extractCaseAStrings(src: string): CaseAString[] {
@@ -5776,13 +5776,16 @@ describe("hook routing prompt-surface contract (#683 ADR-0002 + ADR-0003)", () =
         // assigned to `command:` or `reason:` object keys.
         const trimmed = ln.replace(/^\s+/, "");
         if (trimmed.startsWith("//") || trimmed.startsWith("*")) continue;
-        // Require BOTH "redirected" AND a template-literal backtick
-        // (current shape for L707/738/751/804). CASE B strings use the
-        // `Blocked by security policy: …` form and are excluded.
+        // High-risk routing paths now use action:"ask" with advisory wording.
+        // We still enforce ADR-0003 voice on the reason strings: no bare
+        // BLOCKED, no forbidden negations, and they must name a ctx_*
+        // alternative. CASE B strings use the `Blocked by security policy: …`
+        // form and are excluded.
         if (
-          /redirected/i.test(ln) &&
           /`/.test(ln) &&
-          !/Blocked by security policy/.test(ln)
+          /ctx_(execute|fetch_and_index|search|batch_execute)/.test(ln) &&
+          !/Blocked by security policy/.test(ln) &&
+          (/(curl|wget|inline HTTP|build tools|WebFetch)/i.test(ln) || /redirected/i.test(ln))
         ) {
           out.push({ lineNo: i + 1, payload: ln });
         }
@@ -5792,17 +5795,17 @@ describe("hook routing prompt-surface contract (#683 ADR-0002 + ADR-0003)", () =
 
     const caseAs = extractCaseAStrings(routingMjs);
 
-    test("at least 4 CASE A redirect strings present (sanity check on extractor)", () => {
-      // Current corpus: L707 curl/wget, L738 inline HTTP, L751 build tools,
-      // L804 WebFetch. If a contributor removes one, the count drops and
+    test("at least 4 CASE A redirect/ask strings present (sanity check on extractor)", () => {
+      // Current corpus: curl/wget ask, inline HTTP ask, build tools ask,
+      // WebFetch ask. If a contributor removes one, the count drops and
       // this sanity check forces the test author to revisit the extractor.
       expect(caseAs.length).toBeGreaterThanOrEqual(4);
     });
 
     for (const cs of caseAs) {
       describe(`hooks/core/routing.mjs:${cs.lineNo}`, () => {
-        test("MUST open with the verb 'redirected' (CASE A wording — ADR-0003)", () => {
-          expect(cs.payload).toMatch(/redirected/i);
+        test("MUST name at least one ctx_* alternative tool", () => {
+          expect(cs.payload).toMatch(/ctx_(execute|fetch_and_index|search|batch_execute)/);
         });
 
         test("MUST NOT contain bare uppercase BLOCKED (reserved for CASE B)", () => {
@@ -5810,14 +5813,6 @@ describe("hook routing prompt-surface contract (#683 ADR-0002 + ADR-0003)", () =
           // Lowercase `block` (e.g. `blockchain`) is fine; uppercase BLOCKED
           // is the Constitutional AI trigger.
           expect(cs.payload).not.toMatch(/\bBLOCKED\b/);
-        });
-
-        test("MUST name at least one ctx_* alternative tool", () => {
-          // ADR-0003 §CASE A: "MUST specify the alternative tool to use."
-          // The current four sites all name ctx_execute and/or
-          // ctx_fetch_and_index — we just enforce that SOMETHING ctx_*
-          // is mentioned so the agent has a concrete next call.
-          expect(cs.payload).toMatch(/ctx_(execute|fetch_and_index|search|batch_execute)/);
         });
 
         // ── PR #683 follow-up (Mert flag): negation-pattern eradication ──

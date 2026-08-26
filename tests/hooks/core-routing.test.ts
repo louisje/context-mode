@@ -83,20 +83,18 @@ describe("routePreToolUse", () => {
   // ─── Bash routing ──────────────────────────────────────
 
   describe("Bash tool", () => {
-    it("denies curl commands with modify action", () => {
+    it("asks before curl commands", () => {
       const result = routePreToolUse("Bash", {
         command: "curl https://example.com",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
-      expect(result!.updatedInput).toBeDefined();
-      const cmd = (result!.updatedInput as Record<string, string>).command;
-      expect(cmd).toContain("curl/wget redirected");
-      expect(cmd).not.toContain("curl/wget blocked");
-      expect(cmd).toMatch(/retry/i);
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("curl/wget output can flood");
+      expect(result!.reason).toContain("ctx_execute");
+      expect(result!.reason).toMatch(/retry/i);
     });
 
-    it("denies Codex exec_command cmd payloads like Bash command payloads", () => {
+    it("asks before Codex exec_command curl payloads", () => {
       const result = routePreToolUse(
         "exec_command",
         { cmd: "curl https://example.com" },
@@ -105,13 +103,11 @@ describe("routePreToolUse", () => {
         "codex-cmd-curl",
       );
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
-      expect((result!.updatedInput as Record<string, string>).command).toContain(
-        "curl/wget redirected",
-      );
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("curl/wget output can flood");
     });
 
-    it("denies agy run_command CommandLine payloads like Bash command payloads", () => {
+    it("asks before agy run_command CommandLine curl payloads", () => {
       const result = routePreToolUse(
         "run_command",
         { CommandLine: "curl https://example.com" },
@@ -120,21 +116,17 @@ describe("routePreToolUse", () => {
         "agy-commandline-curl",
       );
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
-      expect((result!.updatedInput as Record<string, string>).command).toContain(
-        "curl/wget redirected",
-      );
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("curl/wget output can flood");
     });
 
-    it("denies wget commands with modify action", () => {
+    it("asks before wget commands", () => {
       const result = routePreToolUse("Bash", {
         command: "wget https://example.com/file.tar.gz",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
-      expect((result!.updatedInput as Record<string, string>).command).toContain(
-        "curl/wget redirected",
-      );
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("curl/wget output can flood");
     });
 
     // ─── curl/wget file-output allow-list (#166) ────────────
@@ -167,36 +159,36 @@ describe("routePreToolUse", () => {
       expect(result).toBeNull();
     });
 
-    it("blocks curl -o - (stdout alias)", () => {
+    it("asks before curl -o - (stdout alias)", () => {
       const result = routePreToolUse("Bash", {
         command: "curl -s -o - https://example.com",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
+      expect(result!.action).toBe("ask");
     });
 
-    it("blocks curl -o file WITHOUT silent flag", () => {
+    it("asks before curl -o file WITHOUT silent flag", () => {
       const result = routePreToolUse("Bash", {
         command: "curl -L -o /tmp/file.tar.gz https://example.com/file.tar.gz",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
+      expect(result!.action).toBe("ask");
     });
 
-    it("blocks curl -o file with --verbose", () => {
+    it("asks before curl -o file with --verbose", () => {
       const result = routePreToolUse("Bash", {
         command: "curl -s --verbose -o /tmp/file.tar.gz https://example.com/file.tar.gz",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
+      expect(result!.action).toBe("ask");
     });
 
-    it("blocks chained: curl -sLo file && curl url (second floods)", () => {
+    it("asks before chained: curl -sLo file && curl url (second floods)", () => {
       const result = routePreToolUse("Bash", {
         command: "curl -sL -o /tmp/file.tar.gz https://example.com/a.tar.gz && curl https://example.com/api",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
+      expect(result!.action).toBe("ask");
     });
 
     it("allows chained: curl -sLo file && tar xzf file (both safe)", () => {
@@ -206,27 +198,24 @@ describe("routePreToolUse", () => {
       expect(result).toBeNull();
     });
 
-    it("denies inline fetch() with modify action", () => {
+    it("asks before inline fetch()", () => {
       const result = routePreToolUse("Bash", {
         command: 'node -e "fetch(\'https://api.example.com/data\')"',
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
-      const cmd = (result!.updatedInput as Record<string, string>).command;
-      expect(cmd).toContain("Inline HTTP redirected");
-      expect(cmd).not.toContain("Inline HTTP blocked");
-      expect(cmd).toMatch(/retry/i);
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("inline HTTP output can flood");
+      expect(result!.reason).toContain("ctx_execute");
+      expect(result!.reason).toMatch(/retry/i);
     });
 
-    it("denies requests.get() with modify action", () => {
+    it("asks before requests.get()", () => {
       const result = routePreToolUse("Bash", {
         command: 'python -c "import requests; requests.get(\'https://example.com\')"',
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
-      expect((result!.updatedInput as Record<string, string>).command).toContain(
-        "Inline HTTP redirected",
-      );
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("inline HTTP output can flood");
     });
 
     it("git status — bypassed by structurally-bounded allowlist (#463)", () => {
@@ -250,46 +239,45 @@ describe("routePreToolUse", () => {
       expect(result!.action).toBe("context");
     });
 
-    it("redirects ./gradlew build to execute sandbox", () => {
+    it("asks before ./gradlew build", () => {
       const result = routePreToolUse("Bash", {
         command: "./gradlew build",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
-      expect((result!.updatedInput as Record<string, string>).command).toContain(
-        "Build tool redirected",
-      );
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("build tools can produce very verbose output");
+      expect(result!.reason).toContain("ctx_execute");
     });
 
-    it("redirects gradle test to execute sandbox", () => {
+    it("asks before gradle test", () => {
       const result = routePreToolUse("Bash", {
         command: "gradle test --info",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
+      expect(result!.action).toBe("ask");
     });
 
-    it("redirects mvn package to execute sandbox", () => {
+    it("asks before mvn package", () => {
       const result = routePreToolUse("Bash", {
         command: "mvn clean package -DskipTests",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
+      expect(result!.action).toBe("ask");
     });
 
-    it("redirects ./mvnw verify to execute sandbox", () => {
+    it("asks before ./mvnw verify", () => {
       const result = routePreToolUse("Bash", {
         command: "./mvnw verify",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
+      expect(result!.action).toBe("ask");
     });
 
     it("does not false-positive on gradle in quoted text", () => {
       // Use a command whose first word is NOT in the #463 structurally-bounded
       // allowlist (`echo` is allowlisted), so we still exercise the
       // strip-quotes-then-match-gradle path. The intent is to prove the
-      // gradle build-tool redirect doesn't fire on quoted occurrences.
+      // gradle build-tool ask doesn't fire on quoted occurrences.
       const result = routePreToolUse("Bash", {
         command: 'find . -name "run gradle build to compile"',
       });
@@ -299,32 +287,30 @@ describe("routePreToolUse", () => {
     });
 
     // Issue #406 — sbt added alongside gradle/maven
-    it("redirects sbt compile to execute sandbox (Issue #406)", () => {
+    it("asks before sbt compile (Issue #406)", () => {
       const result = routePreToolUse("Bash", {
         command: "sbt compile",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
-      expect((result!.updatedInput as Record<string, string>).command).toContain(
-        "Build tool redirected",
-      );
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("build tools can produce very verbose output");
     });
 
-    it("redirects ./sbt test to execute sandbox", () => {
+    it("asks before ./sbt test", () => {
       const result = routePreToolUse("Bash", {
         command: "./sbt test",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
+      expect(result!.action).toBe("ask");
     });
 
     it("does not false-positive on substrings like gradle-wrapper-config or mvnDocker", () => {
       // Word-boundary guard — these are NOT gradle/mvn invocations.
       const r1 = routePreToolUse("Bash", { command: "ls gradle-wrapper-config" });
-      expect(r1?.action).not.toBe("modify");
+      expect(r1?.action).not.toBe("ask");
       const r2 = routePreToolUse("Bash", { command: "echo mvnDocker-image" });
-      // Quoted/echo passes context, not modify
-      expect(r2?.action).not.toBe("modify");
+      // Quoted/echo passes context, not ask
+      expect(r2?.action).not.toBe("ask");
     });
   });
 
@@ -372,23 +358,20 @@ describe("routePreToolUse", () => {
   // ─── WebFetch routing ──────────────────────────────────
 
   describe("WebFetch tool", () => {
-    it("returns deny action with redirect message", () => {
+    it("returns ask action with redirect suggestion", () => {
       const result = routePreToolUse("WebFetch", {
         url: "https://docs.example.com",
         prompt: "Get the docs",
       });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("deny");
-      // PR #654 substitute: imperative-positive framing, no "blocked" wording,
-      // explicit retry hint to keep Haiku-tier agents from capitulating to
-      // training data on transient DNS errors (audit Probe 3).
-      expect(result!.reason).toContain("WebFetch redirected");
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("WebFetch output can flood");
       expect(result!.reason).not.toContain("WebFetch blocked");
       expect(result!.reason).toContain("fetch_and_index");
       expect(result!.reason).toMatch(/retry/i);
     });
 
-    it("includes the URL in deny reason", () => {
+    it("includes the URL in ask reason", () => {
       const url = "https://api.github.com/repos/test";
       const result = routePreToolUse("WebFetch", { url });
       expect(result).not.toBeNull();
@@ -405,29 +388,29 @@ describe("routePreToolUse", () => {
         "agy-read-url",
       );
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("deny");
+      expect(result!.action).toBe("ask");
       expect(result!.reason).toContain(url);
       // agy's call surface is context-mode/<tool> (see hooks/core/tool-naming.mjs),
       // not Claude's mcp__context-mode__<tool> form.
       expect(result!.reason).toContain("context-mode/ctx_fetch_and_index");
     });
 
-    it("treats mcp_web_fetch as WebFetch and blocks it", () => {
+    it("treats mcp_web_fetch as WebFetch and asks before it", () => {
       const url = "https://example.com";
       const result = routePreToolUse("mcp_web_fetch", { url });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("deny");
-      expect(result!.reason).toContain("WebFetch redirected");
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("WebFetch output can flood");
       expect(result!.reason).toContain("fetch_and_index");
       expect(result!.reason).toContain("ctx_search");
     });
 
-    it("treats mcp_fetch_tool as WebFetch and blocks it", () => {
+    it("treats mcp_fetch_tool as WebFetch and asks before it", () => {
       const url = "https://example.com";
       const result = routePreToolUse("mcp_fetch_tool", { url });
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("deny");
-      expect(result!.reason).toContain("WebFetch redirected");
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("WebFetch output can flood");
       expect(result!.reason).toContain("fetch_and_index");
       expect(result!.reason).toContain("ctx_search");
     });
@@ -457,7 +440,7 @@ describe("routePreToolUse", () => {
       expect(result).toBeNull();
     });
 
-    it("keeps WebFetch redirected when options are omitted", () => {
+    it("keeps WebFetch as ask when options are omitted", () => {
       const result = routePreToolUse(
         "WebFetch",
         { url: "https://example.com" },
@@ -466,7 +449,7 @@ describe("routePreToolUse", () => {
         "main-webfetch-default-options",
       );
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("deny");
+      expect(result!.action).toBe("ask");
       expect(result!.reason).toContain("ctx_fetch_and_index");
     });
 
@@ -477,7 +460,7 @@ describe("routePreToolUse", () => {
         session_id: "core-routing-main-webfetch",
       });
       expect(main.status).toBe(0);
-      expect(main.parsed?.hookSpecificOutput?.permissionDecision).toBe("deny");
+      expect(main.parsed?.hookSpecificOutput?.permissionDecision).toBe("ask");
       expect(main.parsed?.hookSpecificOutput?.permissionDecisionReason).toContain("ctx_fetch_and_index");
 
       const subagent = await spawnPreToolUseHook({

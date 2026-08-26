@@ -93,25 +93,23 @@ function runHook(input: Record<string, unknown>, env?: Record<string, string>, {
 }
 
 /**
- * Assert hook redirects Bash command via `permissionDecision: "deny"` + reason.
+ * Assert hook asks before Bash command via `permissionDecision: "ask"` + reason.
  *
- * CC v2.1.x Bash tool ignores `updatedInput.command` substitution under
- * `permissionDecision: "allow"` — original command runs unchanged. Only
- * `permissionDecision: "deny"` is honored for Bash blocking (verified via
- * /diagnose Phase 4 forced-deny probe). The claude-code formatter now emits
- * a deny shape for modify intent and surfaces the routing guidance via
- * `permissionDecisionReason`.
+ * The routing layer now emits `action: "ask"` for high-risk Bash paths
+ * (curl/wget, inline HTTP, build tools) instead of forcing a redirect.
+ * The claude-code formatter surfaces the guidance via
+ * `permissionDecisionReason` so the user can decide.
  */
-function assertRedirect(result: HookResult, substringInReason: string) {
+function assertAsk(result: HookResult, substringInReason: string) {
   assert.equal(result.exitCode, 0, `Expected exit 0, got ${result.exitCode}`);
-  assert.ok(result.stdout.length > 0, "Expected non-empty stdout for redirect");
+  assert.ok(result.stdout.length > 0, "Expected non-empty stdout for ask");
   const parsed = JSON.parse(result.stdout);
   const hso = parsed.hookSpecificOutput;
   assert.ok(hso, "Expected hookSpecificOutput in response");
   assert.equal(
     hso.permissionDecision,
-    "deny",
-    `Expected permissionDecision="deny" (CC Bash ignores updatedInput on allow), got: ${hso.permissionDecision}`,
+    "ask",
+    `Expected permissionDecision="ask", got: ${hso.permissionDecision}`,
   );
   assert.ok(
     typeof hso.permissionDecisionReason === "string" && hso.permissionDecisionReason.length > 0,
@@ -124,21 +122,7 @@ function assertRedirect(result: HookResult, substringInReason: string) {
   assert.equal(
     hso.updatedInput,
     undefined,
-    "updatedInput MUST NOT appear alongside deny — CC ignores it for Bash",
-  );
-}
-
-/** Assert hook denies with permissionDecision: deny */
-function assertDeny(result: HookResult, substringInReason: string) {
-  assert.equal(result.exitCode, 0, `Expected exit 0, got ${result.exitCode}`);
-  assert.ok(result.stdout.length > 0, "Expected non-empty stdout for deny");
-  const parsed = JSON.parse(result.stdout);
-  const hso = parsed.hookSpecificOutput;
-  assert.ok(hso, "Expected hookSpecificOutput in response");
-  assert.equal(hso.permissionDecision, "deny", `Expected permissionDecision=deny`);
-  assert.ok(
-    hso.permissionDecisionReason.includes(substringInReason),
-    `Expected permissionDecisionReason to contain "${substringInReason}", got: ${hso.permissionDecisionReason}`,
+    "updatedInput MUST NOT appear alongside ask",
   );
 }
 
@@ -160,44 +144,44 @@ function assertHookSpecificOutput(result: HookResult, key: string) {
 }
 
 describe("Bash: Redirected Commands", () => {
-  test("Bash + curl: redirected to echo via updatedInput", () => {
+  test("Bash + curl: asks before running", () => {
     const result = runHook({
       tool_name: "Bash",
       tool_input: { command: "curl -s http://example.com" },
     });
-    assertRedirect(result, "context-mode");
+    assertAsk(result, "context-mode");
   });
 
-  test("Bash + wget: redirected to echo via updatedInput", () => {
+  test("Bash + wget: asks before running", () => {
     const result = runHook({
       tool_name: "Bash",
       tool_input: { command: "wget http://example.com/file.tar.gz" },
     });
-    assertRedirect(result, "context-mode");
+    assertAsk(result, "context-mode");
   });
 
-  test("Bash + node -e with inline HTTP call: redirected to echo", () => {
+  test("Bash + node -e with inline HTTP call: asks before running", () => {
     const result = runHook({
       tool_name: "Bash",
       tool_input: { command: `node -e "fetch('http://api.example.com/data')"` },
     });
-    assertRedirect(result, "context-mode");
+    assertAsk(result, "context-mode");
   });
 
-  test("Bash + ./gradlew build: redirected to execute sandbox (Issue #38)", () => {
+  test("Bash + ./gradlew build: asks before running (Issue #38)", () => {
     const result = runHook({
       tool_name: "Bash",
       tool_input: { command: "./gradlew build --info" },
     });
-    assertRedirect(result, "Build tool redirected");
+    assertAsk(result, "build tools can produce very verbose output");
   });
 
-  test("Bash + mvn package: redirected to execute sandbox (Issue #38)", () => {
+  test("Bash + mvn package: asks before running (Issue #38)", () => {
     const result = runHook({
       tool_name: "Bash",
       tool_input: { command: "mvn clean package -DskipTests" },
     });
-    assertRedirect(result, "Build tool redirected");
+    assertAsk(result, "build tools can produce very verbose output");
   });
 });
 
@@ -247,24 +231,19 @@ describe("Bash: Allowed Commands", () => {
 });
 
 describe("WebFetch", () => {
-  test("WebFetch + any URL: denied with sandbox redirect", () => {
+  test("WebFetch + any URL: asks with sandbox redirect suggestion", () => {
     const result = runHook({
       tool_name: "WebFetch",
       tool_input: { url: "https://docs.example.com/api" },
     });
-    assertDeny(result, "fetch_and_index");
+    assertAsk(result, "fetch_and_index");
     const parsed = JSON.parse(result.stdout);
     assert.ok(
       parsed.hookSpecificOutput.permissionDecisionReason.includes("https://docs.example.com/api"),
       "Expected original URL in reason",
     );
-    // PR #683 follow-up (ADR-0003 amendment): the deny reason was reframed
-    // affirmatively. The negative "Do NOT retry with curl" hint was replaced
-    // by a positive imperative retry hint scoped to transient DNS errors and
-    // by the ctx_fetch_and_index call instruction. Assert on the affirmative
-    // wording instead of the dropped negation.
     assert.ok(
-      /Retry the same call on a transient DNS error/.test(parsed.hookSpecificOutput.permissionDecisionReason),
+      /Retry transient DNS errors/.test(parsed.hookSpecificOutput.permissionDecisionReason),
       "Expected positive transient-DNS retry hint in reason",
     );
     assert.ok(
@@ -660,27 +639,24 @@ describe("Plugin Tool Name Format in ROUTING_BLOCK", () => {
     assert.ok(!ctx.includes(SHORT_PREFIX + "ctx_execute"), "Grep nudge must not contain short-form ctx_execute");
   });
 
-  test("WebFetch deny reason uses plugin-format fetch_and_index tool name", () => {
+  test("WebFetch ask reason uses plugin-format fetch_and_index tool name", () => {
     const result = runHook({ tool_name: "WebFetch", tool_input: { url: "https://example.com" } });
     assert.equal(result.exitCode, 0);
     const parsed = JSON.parse(result.stdout);
     const reason = parsed.hookSpecificOutput.permissionDecisionReason;
-    assert.ok(reason.includes(PLUGIN_PREFIX + "ctx_fetch_and_index"), "Expected plugin-format ctx_fetch_and_index in WebFetch deny");
-    assert.ok(!reason.includes(SHORT_PREFIX + "ctx_fetch_and_index"), "WebFetch deny must not contain short-form");
+    assert.ok(reason.includes(PLUGIN_PREFIX + "ctx_fetch_and_index"), "Expected plugin-format ctx_fetch_and_index in WebFetch ask");
+    assert.ok(!reason.includes(SHORT_PREFIX + "ctx_fetch_and_index"), "WebFetch ask must not contain short-form");
   });
 
-  test("Bash inline-HTTP redirect uses plugin-format execute tool name (in deny reason)", () => {
-    // CC v2.1.x Bash tool ignores updatedInput.command — the formatter now
-    // emits deny + permissionDecisionReason. The plugin-format tool name
-    // assertion moves from updatedInput.command to permissionDecisionReason.
+  test("Bash inline-HTTP ask uses plugin-format execute tool name (in ask reason)", () => {
     const bashCmd = "python3 -c 'import requests; requests.get(url)'";
     const result = runHook({ tool_name: "Bash", tool_input: { command: bashCmd } });
     assert.equal(result.exitCode, 0);
     const parsed = JSON.parse(result.stdout);
     const reason = parsed.hookSpecificOutput.permissionDecisionReason;
     assert.ok(typeof reason === "string" && reason.length > 0, "Expected non-empty permissionDecisionReason");
-    assert.ok(reason.includes(PLUGIN_PREFIX + "ctx_execute"), "Expected plugin-format ctx_execute in inline-HTTP redirect reason");
-    assert.ok(!reason.includes(SHORT_PREFIX + "ctx_execute"), "Inline-HTTP redirect must not contain short-form ctx_execute");
+    assert.ok(reason.includes(PLUGIN_PREFIX + "ctx_execute"), "Expected plugin-format ctx_execute in inline-HTTP ask reason");
+    assert.ok(!reason.includes(SHORT_PREFIX + "ctx_execute"), "Inline-HTTP ask must not contain short-form ctx_execute");
   });
 });
 
@@ -735,7 +711,7 @@ describe("UTF-8 BOM handling (core/stdin.mjs path)", () => {
       tool_name: "Bash",
       tool_input: { command: "curl -s http://example.com" },
     }, undefined, { bom: true });
-    assertRedirect(result, "context-mode");
+    assertAsk(result, "context-mode");
   });
 });
 

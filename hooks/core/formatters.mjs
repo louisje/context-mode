@@ -12,10 +12,11 @@ export const formatters = {
         permissionDecisionReason: reason,
       },
     }),
-    ask: () => ({
+    ask: (reason) => ({
       hookSpecificOutput: {
         hookEventName: "PreToolUse",
         permissionDecision: "ask",
+        permissionDecisionReason: reason ?? "Action requires user confirmation",
       },
     }),
     // Tool-aware modify handling for claude-code:
@@ -86,8 +87,9 @@ export const formatters = {
       permissionDecision: "deny",
       permissionDecisionReason: reason,
     }),
-    ask: () => ({
+    ask: (reason) => ({
       permissionDecision: "ask",
+      permissionDecisionReason: reason ?? "Action requires user confirmation",
     }),
     modify: (updatedInput) => ({
       hookSpecificOutput: {
@@ -133,8 +135,9 @@ export const formatters = {
       permissionDecision: "deny",
       permissionDecisionReason: reason,
     }),
-    ask: () => ({
+    ask: (reason) => ({
       permissionDecision: "ask",
+      permissionDecisionReason: reason ?? "Action requires user confirmation",
     }),
     modify: (updatedInput) => ({
       hookSpecificOutput: {
@@ -261,8 +264,9 @@ export const formatters = {
       permission: "deny",
       user_message: reason,
     }),
-    ask: () => ({
+    ask: (reason) => ({
       permission: "ask",
+      user_message: reason ?? "Action requires user confirmation",
     }),
     modify: (updatedInput) => ({
       updated_input: updatedInput,

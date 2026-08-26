@@ -473,15 +473,15 @@ describe("Bash nudge size threshold (#817)", () => {
     expect(decision?.action, "long command must still be nudged").toBe("context");
   });
 
-  it("threshold does NOT relax curl/wget redirects (those stay deterministic)", () => {
+  it("threshold does NOT relax curl/wget asks (those stay deterministic)", () => {
     process.env[ENV] = "4096"; // generous threshold — would otherwise mark this short cmd lightweight
     // The threshold gates ONLY the generic Bash routing nudge. The curl/wget
-    // branch runs earlier and returns a `modify` redirect (or null only when
+    // branch runs earlier and returns an `ask` decision (or null only when
     // MCP is unavailable) — it must NEVER be turned into a "pass-through-because-short".
     // Assert the decision is NOT the generic "context" nudge: the threshold must
     // not reclassify a curl flood as a lightweight bounded command.
     const curl = routePreToolUse("Bash", { command: "curl https://x.io" }, "/test", "claude-code", SID);
-    expect(curl?.action ?? "modify-or-passthrough", "curl path must not become the generic nudge").not.toBe("context");
+    expect(curl?.action ?? "ask-or-passthrough", "curl path must not become the generic nudge").not.toBe("context");
   });
 
   it("invalid / zero env value falls back to default (every unbounded cmd nudged)", () => {

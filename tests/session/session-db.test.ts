@@ -1334,7 +1334,7 @@ describe("rejected-approach category", () => {
     db.insertEvent(sid, {
       type: "rejected",
       category: "rejected-approach",
-      data: "WebFetch: context-mode: WebFetch blocked. Use ctx_fetch_and_index instead.",
+      data: "WebFetch: context-mode: WebFetch output can flood your conversation context. Consider calling ctx_fetch_and_index instead.",
       priority: 2,
       data_hash: "",
     }, "PreToolUse");
@@ -1378,7 +1378,7 @@ describe("rejected-approach category", () => {
     db.insertEvent(sid, {
       type: "rejected",
       category: "rejected-approach",
-      data: "Bash(curl): curl/wget blocked. Use ctx_execute instead.",
+      data: "Bash(curl): context-mode: curl/wget output can flood your conversation context. Consider calling ctx_execute instead.",
       priority: 2,
       data_hash: "",
     }, "PreToolUse");

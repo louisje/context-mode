@@ -312,42 +312,36 @@ describe("backward compat static exports", () => {
 // ═══════════════════════════════════════════════════════════════════
 
 describe("routePreToolUse with platform parameter", () => {
-  it("curl block message uses gemini-cli tool names when platform=gemini-cli", () => {
+  it("curl ask message uses gemini-cli tool names when platform=gemini-cli", () => {
     const result = routePreToolUse("Bash", { command: "curl https://example.com" }, "/tmp", "gemini-cli");
     expect(result).not.toBeNull();
-    expect(result!.action).toBe("modify");
-    const cmd = (result!.updatedInput as Record<string, string>).command;
-    expect(cmd).toContain("mcp__context-mode__ctx_fetch_and_index");
-    expect(cmd).toContain("mcp__context-mode__ctx_execute");
-    expect(cmd).not.toContain("mcp__plugin_context-mode_context-mode__");
+    expect(result!.action).toBe("ask");
+    expect(result!.reason).toContain("mcp__context-mode__ctx_fetch_and_index");
+    expect(result!.reason).toContain("mcp__context-mode__ctx_execute");
+    expect(result!.reason).not.toContain("mcp__plugin_context-mode_context-mode__");
   });
 
-  it("curl block message uses claude-code tool names when platform is omitted", () => {
+  it("curl ask message uses claude-code tool names when platform is omitted", () => {
     const result = routePreToolUse("Bash", { command: "curl https://example.com" }, "/tmp");
     expect(result).not.toBeNull();
-    const cmd = (result!.updatedInput as Record<string, string>).command;
-    expect(cmd).toContain("mcp__plugin_context-mode_context-mode__ctx_fetch_and_index");
+    expect(result!.reason).toContain("mcp__plugin_context-mode_context-mode__ctx_fetch_and_index");
   });
 
-  it("inline HTTP block uses cursor bare names when platform=cursor", () => {
+  it("inline HTTP ask uses cursor bare names when platform=cursor", () => {
     const result = routePreToolUse("Bash", {
       command: 'python -c "requests.get(\'http://example.com\')"',
     }, "/tmp", "cursor");
     expect(result).not.toBeNull();
-    const cmd = (result!.updatedInput as Record<string, string>).command;
-    expect(cmd).toContain("ctx_execute");
-    // PR #683 follow-up (ADR-0003 amendment): "Think in Code" voice-of-trainer
-    // marker was folded into the imperative call instruction. The deny reason
-    // now opens with the affirmative redirect frame; assert on the explicit
-    // ctx_execute call instruction that survived the rewrite.
-    expect(cmd).toContain("Call ctx_execute");
-    expect(cmd).not.toContain("mcp__");
+    expect(result!.action).toBe("ask");
+    expect(result!.reason).toContain("ctx_execute");
+    expect(result!.reason).toContain("Call ctx_execute");
+    expect(result!.reason).not.toContain("mcp__");
   });
 
-  it("WebFetch deny uses kiro tool names when platform=kiro", () => {
+  it("WebFetch ask uses kiro tool names when platform=kiro", () => {
     const result = routePreToolUse("WebFetch", { url: "https://example.com" }, "/tmp", "kiro");
     expect(result).not.toBeNull();
-    expect(result!.action).toBe("deny");
+    expect(result!.action).toBe("ask");
     expect(result!.reason).toContain("@context-mode/ctx_fetch_and_index");
     expect(result!.reason).toContain("@context-mode/ctx_search");
   });
@@ -417,18 +411,17 @@ describe("routePreToolUse with platform parameter", () => {
     expect(result!.additionalContext).not.toContain("mcp__context-mode__ctx_execute_file");
   });
 
-  it("build tool redirect uses platform tool names when platform=gemini-cli", () => {
+  it("build tool ask uses platform tool names when platform=gemini-cli", () => {
     const result = routePreToolUse("Bash", { command: "./gradlew build" }, "/tmp", "gemini-cli");
     expect(result).not.toBeNull();
-    expect(result!.action).toBe("modify");
-    const cmd = (result!.updatedInput as Record<string, string>).command;
-    expect(cmd).toContain("mcp__context-mode__ctx_execute");
-    expect(cmd).not.toContain("mcp__plugin_context-mode_context-mode__");
+    expect(result!.action).toBe("ask");
+    expect(result!.reason).toContain("mcp__context-mode__ctx_execute");
+    expect(result!.reason).not.toContain("mcp__plugin_context-mode_context-mode__");
   });
 
   // ─── SLICE Qwen-3: routing.mjs Qwen native names ───
   describe("Qwen Code native tool names route through canonical aliases", () => {
-    it("run_shell_command + curl routes as Bash → modify (curl block)", () => {
+    it("run_shell_command + curl routes as Bash → ask", () => {
       const result = routePreToolUse(
         "run_shell_command",
         { command: "curl https://example.com" },
@@ -436,13 +429,11 @@ describe("routePreToolUse with platform parameter", () => {
         "qwen-code",
       );
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("modify");
-      expect((result!.updatedInput as Record<string, string>).command).toContain(
-        "curl/wget redirected",
-      );
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("curl/wget output can flood");
     });
 
-    it("web_fetch routes as WebFetch → deny", () => {
+    it("web_fetch routes as WebFetch → ask", () => {
       const result = routePreToolUse(
         "web_fetch",
         { url: "https://example.com" },
@@ -450,8 +441,8 @@ describe("routePreToolUse with platform parameter", () => {
         "qwen-code",
       );
       expect(result).not.toBeNull();
-      expect(result!.action).toBe("deny");
-      expect(result!.reason).toContain("WebFetch redirected");
+      expect(result!.action).toBe("ask");
+      expect(result!.reason).toContain("WebFetch output can flood");
     });
 
     it("read_file routes as Read → context guidance", () => {

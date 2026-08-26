@@ -766,11 +766,11 @@ export function routePreToolUse(toolName, toolInput, projectDir, platform, sessi
 
       if (hasDangerousSegment) {
         return mcpRedirect({
-          action: "modify",
-          updatedInput: {
-            command: `echo "context-mode: curl/wget redirected. Call ${t("ctx_execute")}(language, code) to fetch the URL, derive your answer in code, and print only the result — the raw HTTP body stays in the sandbox instead of entering your conversation. Or call ${t("ctx_fetch_and_index")}(url, source) when you want to query the response later via ${t("ctx_search")}. Both have full network access. Retry the same call on a transient DNS error (EAI_AGAIN, ETIMEDOUT, ENETUNREACH)."`,
-          },
+          action: "ask",
+          reason: `context-mode: curl/wget output can flood your conversation context. Consider calling ${t("ctx_execute")}(language, code) to fetch the URL, derive your answer in code, and print only the result — the raw HTTP body stays in the sandbox. Or call ${t("ctx_fetch_and_index")}(url, source) when you want to query the response later via ${t("ctx_search")}. If you proceed, the raw output will enter your context. Retry transient DNS errors (EAI_AGAIN, ETIMEDOUT, ENETUNREACH) by retrying the same call.`,
           // D2 PRD Phase 3.1: marker payload for PostToolUse byte accounting.
+          // Even though we now ask rather than deny, keep the marker so
+          // analytics can still measure how often a high-risk path fired.
           redirectMeta: {
             tool: "Bash",
             type: "bash-redirected",
@@ -797,10 +797,8 @@ export function routePreToolUse(toolName, toolInput, projectDir, platform, sessi
       /http\.(get|request)\s*\(/i.test(noHeredoc)
     ) {
       return mcpRedirect({
-        action: "modify",
-        updatedInput: {
-          command: `echo "context-mode: Inline HTTP redirected. Call ${t("ctx_execute")}(language, code) to fetch, derive your answer in code, and console.log() only the result — the raw response body stays in the sandbox instead of entering your conversation. Full network access. Retry the same call on a transient DNS error (EAI_AGAIN, ETIMEDOUT, ENETUNREACH)."`,
-        },
+        action: "ask",
+        reason: `context-mode: inline HTTP output can flood your conversation context. Call ${t("ctx_execute")}(language, code) to fetch, derive your answer in code, and console.log() only the result — the raw response body stays in the sandbox. If you proceed, the raw output will enter your context. Retry transient DNS errors (EAI_AGAIN, ETIMEDOUT, ENETUNREACH) by retrying the same call.`,
       }, mcpToolsAvailable);
     }
 
@@ -808,12 +806,9 @@ export function routePreToolUse(toolName, toolInput, projectDir, platform, sessi
     // These produce extremely verbose output that should stay in sandbox.
     // Word-boundary guard prevents matching `gradle-wrapper-config`, `mvnDocker`, etc.
     if (/(^|\s|&&|\||\;)(\.\/gradlew|gradlew|gradle|\.\/mvnw|mvnw|mvn|\.\/sbt|sbt)(\s|$)/i.test(stripped)) {
-      const safeCmd = command.replace(/\\/g, "\\\\").replace(/"/g, '\\"');
       return mcpRedirect({
-        action: "modify",
-        updatedInput: {
-          command: `echo "context-mode: Build tool redirected. Call ${t("ctx_execute")}(language: \\"shell\\", code: \\"${safeCmd} 2>&1 | tail -30\\") to run the build and print only the tail — the verbose build log stays in the sandbox instead of entering your conversation. For more targeted output, replace \\"tail -30\\" with \\"grep -E '(error|warning|FAIL|✗|×)'\\" or similar, so only the lines that matter come back."`,
-        },
+        action: "ask",
+        reason: `context-mode: build tools can produce very verbose output that floods your conversation context. Consider calling ${t("ctx_execute")}(language: "shell", code: "${command} 2>&1 | tail -30") to run the build and print only the tail — the verbose log stays in the sandbox. For more targeted output, replace "tail -30" with "grep -E '(error|warning|FAIL|✗|×)'" or similar. If you proceed, the full build output will enter your context.`,
       }, mcpToolsAvailable);
     }
 
@@ -871,13 +866,15 @@ export function routePreToolUse(toolName, toolInput, projectDir, platform, sessi
     return guidanceOnce("grep", grepGuidance, sessionId);
   }
 
-  // ─── WebFetch: deny + redirect to sandbox ───
+  // ─── WebFetch: ask + suggest sandbox ───
   if (canonical === "WebFetch") {
     const url = getWebFetchUrl(toolInput);
     return mcpRedirect({
-      action: "deny",
-      reason: `context-mode: WebFetch redirected. Call ${t("ctx_fetch_and_index")}(url: "${url}", source: "...") to fetch + index the page, then ${t("ctx_search")}(queries: [...]) to query the indexed content — the raw page bytes stay in storage instead of entering your conversation. Or call ${t("ctx_execute")}(language, code) when you want to derive your answer in one round trip (parse, extract, count) without persisting the response. Both have full network access. Retry the same call on a transient DNS error (EAI_AGAIN, ETIMEDOUT, ENETUNREACH).`,
+      action: "ask",
+      reason: `context-mode: WebFetch output can flood your conversation context. Call ${t("ctx_fetch_and_index")}(url: "${url}", source: "...") to fetch + index the page, then ${t("ctx_search")}(queries: [...]) to query the indexed content — the raw page bytes stay in storage. Or call ${t("ctx_execute")}(language, code) when you want to derive your answer in one round trip (parse, extract, count) without persisting the response. Both have full network access. If you proceed, the raw page will enter your context. Retry transient DNS errors (EAI_AGAIN, ETIMEDOUT, ENETUNREACH) by retrying the same call.`,
       // D2 PRD Phase 4.1: marker payload for PostToolUse byte accounting.
+      // Even though we now ask rather than deny, keep the marker so
+      // analytics can still measure how often a high-risk path fired.
       redirectMeta: {
         tool: "WebFetch",
         type: "webfetch-redirected",

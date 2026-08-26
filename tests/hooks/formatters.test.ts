@@ -90,13 +90,14 @@ describe("formatDecision", () => {
       expect(output.reason).toBe(denyDecision.reason);
     });
 
-    it("formats ask with hookSpecificOutput.permissionDecision:'ask'", () => {
-      const result = claudeCodeFormat(askDecision) as Record<string, unknown>;
+    it("formats ask with hookSpecificOutput.permissionDecision:'ask' and reason", () => {
+      const result = claudeCodeFormat({ action: "ask", reason: "confirm first" }) as Record<string, unknown>;
       expect(result).not.toBeNull();
 
       const output = result.hookSpecificOutput as Record<string, unknown>;
       expect(output.hookEventName).toBe("PreToolUse");
       expect(output.permissionDecision).toBe("ask");
+      expect(output.permissionDecisionReason).toBe("confirm first");
     });
 
     // CC v2.1.x Bash tool ignores `updatedInput.command` substitution under
@@ -251,11 +252,12 @@ describe("formatDecision", () => {
       expect(result).not.toHaveProperty("hookSpecificOutput");
     });
 
-    it("formats ask with permissionDecision:'ask'", () => {
-      const result = vscodeCopilotFormat(askDecision) as Record<string, unknown>;
+    it("formats ask with permissionDecision:'ask' and reason", () => {
+      const result = vscodeCopilotFormat({ action: "ask", reason: "confirm first" }) as Record<string, unknown>;
       expect(result).not.toBeNull();
 
       expect(result.permissionDecision).toBe("ask");
+      expect(result.permissionDecisionReason).toBe("confirm first");
       expect(result).not.toHaveProperty("hookSpecificOutput");
     });
 
@@ -286,9 +288,10 @@ describe("formatDecision", () => {
       expect(result.user_message).toBe(denyDecision.reason);
     });
 
-    it("formats ask with permission:'ask'", () => {
-      const result = cursorFormat(askDecision) as Record<string, unknown>;
+    it("formats ask with permission:'ask' and user_message", () => {
+      const result = cursorFormat({ action: "ask", reason: "confirm first" }) as Record<string, unknown>;
       expect(result.permission).toBe("ask");
+      expect(result.user_message).toBe("confirm first");
     });
 
     it("formats modify with updated_input", () => {
