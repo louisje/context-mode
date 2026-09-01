@@ -107,19 +107,20 @@ function runnableExists(cmd: string): boolean {
     }
   } else if (!commandExists(cmd)) {
     return false;
+  } else {
+    // POSIX: `command -v` is sufficient. Skip the `--version` liveness probe —
+    // pyenv shims and Homebrew binaries can block for seconds (shim rehash,
+    // cold start), and sequential probes here directly delay MCP `initialize`
+    // beyond VS Code's hardcoded 5s startup grace period. The Windows-only
+    // Store-stub problem (#455) does not exist on POSIX.
+    return true;
   }
-  // Probe with --version. On Windows, allow 5s for cold-start (MS Store stub
-  // fallthrough can be slow). On POSIX, 1500ms is plenty for a real binary
-  // and keeps cold detection of python3 → python → py under ~5s total (#454).
+  // Probe with --version (Windows only). Allow 5s for cold-start (MS Store
+  // stub fallthrough can be slow).
   try {
     // DEP0190 fix: avoid args array with shell:true on Windows.
-    // Use execSync with a command string when shell is required;
-    // keep execFileSync (no shell) on POSIX.
-    if (isWindows) {
-      execSync(`"${cmd}" --version`, { stdio: "pipe", timeout: 5000 });
-    } else {
-      execFileSync(cmd, ["--version"], { stdio: "pipe", timeout: 1500 });
-    }
+    // Use execSync with a command string when shell is required.
+    execSync(`"${cmd}" --version`, { stdio: "pipe", timeout: 5000 });
     return true;
   } catch {
     return false;
