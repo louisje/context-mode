@@ -27,10 +27,10 @@
   ],
   "mcpServers": {
     "context-mode": {
-      "command": "/usr/local/bin/bash",
+      "command": "npx",
       "args": [
-        "-c",
-        "npx -y louisje/context-mode"
+        "--yes",
+        "louisje/context-mode"
       ]
     }
   },
