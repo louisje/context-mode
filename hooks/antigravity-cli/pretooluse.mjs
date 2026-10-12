@@ -43,7 +43,8 @@ try {
     // is <uuid>.jsonl and silently drop the rejected/redirect analytics.
     const sessionId = getSessionId(input, ANTIGRAVITY_CLI_OPTS);
     const formattedDeny = response && typeof response === "object" && response.decision === "deny";
-    if (formattedDeny || decision.action === "deny" || decision.action === "modify") {
+    // ask 也寫 marker（9e2cf93）：analytics 仍量測高風險路徑，與 claude-code pretooluse 一致
+    if (formattedDeny || decision.action === "deny" || decision.action === "modify" || decision.action === "ask") {
       try {
         const reason = formattedDeny
           ? (response.reason || "denied")

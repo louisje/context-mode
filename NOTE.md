@@ -56,8 +56,23 @@ file .../better_sqlite3/build/Release/better_sqlite3.node: ELF 64-bit LSB shared
   - 9 個 dlopen（session-db-bytes-migration 4 + statusline 5）：better-sqlite3 是 Linux ELF binary，`npm install-scripts approve better-sqlite3` + `npm rebuild` 重編成 Mach-O 即綠（package.json 加了 allowScripts）。
   - 13 個 source-string 斷言（start-mjs-self-heal 9 + upgrade-plugin-json-assertion 4）：fork 在 20c0fea 刻意移除 self-heal 自動化（user 自管 plugin cache 路徑）、cli.ts upgrade() 也移除（no tool self-overwrite 原則），上游測試還在斷言接線存在 → 測試 skip 並註明 fork 決策，不刪檔（保留與上游對照）。
 
-### 未修（同類既有問題，超出本次範圍）
-- 同類接線斷言另有 44 個（postinstall-heal、cli-upgrade-verification、ctx-upgrade-platform-threading、upgrade-mcp-json-assertion、upgrade-verifies-binding 等 5 檔），同樣斷言 fork 刻意移除的 self-heal/upgrade 接線，可用同樣方式 skip。
-- `tests/core/cli.test.ts` 40 個、`tests/core/server.test.ts` 18 個（ctx_upgrade/ctx_insight 移除相關）及其餘零星（openclaw curl/wget block、lifecycle SIGTERM、runtime probe 等）。
-- `tests/hooks/integration.test.ts` 缺 `skills/ctx-upgrade/SKILL.md`（同上第 2 點）。
-- `tests/hooks/cache-heal-self-heal.test.ts` /tmp breadcrumb 時序（同上第 1 點）。
+### ✅ 已修（2026-10-12 第二批：剩餘 122 個失敗全數處理，全套 vitest 0 FAIL）
+- heal/upgrade 接線斷言 44 個（postinstall-heal、cli-upgrade-verification、ctx-upgrade-platform-threading、upgrade-mcp-json-assertion、upgrade-verifies-binding 等 6 檔）：同法 skip 附 20c0fea 原因。
+- `tests/core/cli.test.ts` 40 個：35 個 skip（斷言已移除的 upgrade()/heal 接線）；4 個 doctor 測試是錨點 bug（`async function insight` fork 不存在，doctor 本體保留）→ 錨點改 `function statuslineForward`；1 個 plugin.json manifest 斷言更新為 cf47f7a 的 npx per-file pinning。
+- `tests/core/server.test.ts` 18 個：ctx_upgrade/ctx_insight 相關 skip；工具數 ≥11 改 ≥9；annotations EXPECTED 移除兩個已刪工具。
+- 零星修復（真 bug 或測試未同步）：
+  - `tests/lifecycle.test.ts`：`.bin/tsx` 被 npm 裝成真檔案複製（非 symlink），相對 import 斷 → `resolveTsxPath` 優先 `node_modules/tsx/dist/cli.mjs`。
+  - `tests/server-stdin-eof-exit.test.ts`：bundle 載入 ~2.5s > storm deadline 1.5s，2s timeout 誤判 survived → waitForClose 2s→6s。
+  - `hooks/antigravity-cli/pretooluse.mjs`：marker 條件漏 `ask`（9e2cf93 soften 後 curl/wget 是 ask，analytics 沒記到）→ 加 ask，與 claude-code pretooluse 一致。
+  - `tests/plugins/openclaw.test.ts`：curl/wget modify→ask（9e2cf93）更新斷言；ctx_* 11→9。
+  - `tests/hooks/kiro-hooks.test.ts`：curl/wget exit 2→0（ask → kiro passthrough）。
+  - `tests/hooks/vscode-hooks.test.ts`：curl updatedInput→ask flat 結構。
+  - `tests/guidance-throttle.test.ts`：WebFetch deny→ask。
+  - `tests/runtime.test.ts`：1500ms probe 測試更新為「POSIX 不 probe」（4424ba7 fork perf commit，測試沒跟）。
+  - `tests/opencode-plugin.test.ts`：ctx_* 11→9。
+  - `tests/hooks/integration.test.ts`：ctx-upgrade SKILL.md 測試 skip（fork 刻意移除 skill）。
+  - `tests/scripts/start-mjs-{win-install-861,mcp-boot}.test.ts`：整檔 skip（4774441 移除 boot 背景安裝）；861 的 describe 內 collection-phase `sliceBetween` expect 改 try/catch lazy。
+- 結果：`npx vitest run` 4610 passed / 140 skipped / 0 failed（exit=1 僅來自 vitest pool worker 偶發 V8 OOM，非測試失敗，重跑即散）。
+
+### 未修
+- `tests/hooks/cache-heal-self-heal.test.ts` /tmp breadcrumb 時序（同上第 1 點；本輪未再現）。

@@ -194,7 +194,10 @@ setTimeout(() => {
     });
 
     try {
-      const result = await waitForClose(child, 2_000);
+      // bundle 載入 ~2.5s（692KB 同步解析），preload 的 storm deadline 1500ms
+      // 在載入期間過期 → storm 排隊到載入完才開始丟 → handler exit(1) 總計 ~3s。
+      // 2s timeout 會誤判 survived。
+      const result = await waitForClose(child, 6_000);
       if (!result.closed) {
         child.kill("SIGTERM");
         await waitForClose(child, 1_000);

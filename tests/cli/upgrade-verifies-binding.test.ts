@@ -1,4 +1,7 @@
 /**
+ * fork 刻意移除 self-heal/upgrade 接線（20c0fea）：user 自管 plugin cache 路徑，
+ * 無開機/hook 自改寫；上游測試斷言的接線在本 fork 不存在 → skip 保留對照。
+ *
  * /ctx-upgrade must verify the better-sqlite3 binding is present (#514).
  *
  * The historical upgrade flow ran `npm install --production`, then
@@ -36,7 +39,7 @@ function getUpgradeBody(): string {
   return CLI_SRC.slice(start, end);
 }
 
-describe("cli.ts upgrade() — better-sqlite3 binding verification (#514)", () => {
+describe.skip("cli.ts upgrade() — better-sqlite3 binding verification (#514)", () => {
   it("upgrade() references the better-sqlite3 native binding path", () => {
     const body = getUpgradeBody();
     // The verifier must check the canonical binding location.

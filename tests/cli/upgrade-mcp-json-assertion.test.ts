@@ -1,4 +1,7 @@
 /**
+ * fork 刻意移除 self-heal/upgrade 接線（20c0fea）：user 自管 plugin cache 路徑，
+ * 無開機/hook 自改寫；上游測試斷言的接線在本 fork 不存在 → skip 保留對照。
+ *
  * Issue #609 — cli.ts upgrade() MUST sweep stale `.mcp.json` files from
  * every per-version plugin-cache dir before declaring upgrade success.
  *
@@ -45,7 +48,7 @@ const upgradeIdx = cliSrc.indexOf("async function upgrade");
 // do not silently shift the assertion off-window.
 const upgradeBody = cliSrc.slice(upgradeIdx, upgradeIdx + 24000);
 
-describe("cli.ts upgrade() — Issue #609 .mcp.json sweep assertion", () => {
+describe.skip("cli.ts upgrade() — Issue #609 .mcp.json sweep assertion", () => {
   test("post-bump block invokes sweepStaleMcpJson from the shared module", () => {
     // Must run AFTER updatePluginRegistry so the on-disk shape is final.
     const updateIdx = upgradeBody.indexOf("updatePluginRegistry");

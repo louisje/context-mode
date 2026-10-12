@@ -1,4 +1,7 @@
 /**
+ * fork 刻意移除 self-heal/upgrade 接線（20c0fea）：user 自管 plugin cache 路徑，
+ * 無開機/hook 自改寫；上游測試斷言的接線在本 fork 不存在 → skip 保留對照。
+ *
  * cli.ts upgrade-flow verification — v1.0.114 hotfix.
  *
  * The bug being fixed: /ctx-upgrade in v1.0.113 wrote registry version
@@ -53,7 +56,7 @@ const upgradeBody = cliSrc.slice(upgradeIdx, upgradeIdx + 30000);
 // start.mjs wires HEAL 3 + HEAL 4 (Change 1)
 // ─────────────────────────────────────────────────────────
 
-describe("start.mjs HEAL 3 + HEAL 4 wiring (v1.0.114 hotfix)", () => {
+describe.skip("start.mjs HEAL 3 + HEAL 4 wiring (v1.0.114 hotfix)", () => {
   test("imports the shared healInstalledPlugins module", () => {
     expect(startSrc).toMatch(/heal-installed-plugins\.mjs/);
     expect(startSrc).toContain("healInstalledPlugins");
@@ -94,7 +97,7 @@ describe("start.mjs HEAL 3 + HEAL 4 wiring (v1.0.114 hotfix)", () => {
 // cli.ts upgrade() — Change 2 — preflight, post-write, marketplace assertions
 // ─────────────────────────────────────────────────────────
 
-describe("cli.ts upgrade() pre-bump verification (v1.0.114 hotfix)", () => {
+describe.skip("cli.ts upgrade() pre-bump verification (v1.0.114 hotfix)", () => {
   test("reads pluginRoot/.claude-plugin/plugin.json BEFORE updatePluginRegistry", () => {
     const manifestIdx = upgradeBody.indexOf(".claude-plugin");
     const updateIdx = upgradeBody.indexOf("updatePluginRegistry");
@@ -139,7 +142,7 @@ describe("cli.ts upgrade() pre-bump verification (v1.0.114 hotfix)", () => {
   });
 });
 
-describe("cli.ts upgrade() post-write registry consistency check (v1.0.114 hotfix)", () => {
+describe.skip("cli.ts upgrade() post-write registry consistency check (v1.0.114 hotfix)", () => {
   test("re-reads installed_plugins.json after updatePluginRegistry", () => {
     const updateIdx = upgradeBody.indexOf("updatePluginRegistry");
     const recheckIdx = upgradeBody.indexOf("Registry consistency check");
@@ -176,7 +179,7 @@ describe("cli.ts upgrade() post-write registry consistency check (v1.0.114 hotfi
   });
 });
 
-describe("cli.ts upgrade() marketplace post-pull assertion (v1.0.114 hotfix)", () => {
+describe.skip("cli.ts upgrade() marketplace post-pull assertion (v1.0.114 hotfix)", () => {
   test("verifies marketplace clone's plugin.json version matches newVersion", () => {
     expect(upgradeBody).toMatch(/Marketplace clone version mismatch|marketplace.*plugin\.json/i);
   });
@@ -213,7 +216,7 @@ describe("cli.ts upgrade() marketplace post-pull assertion (v1.0.114 hotfix)", (
 // End-to-end: bug-prevention contract
 // ─────────────────────────────────────────────────────────
 
-describe("v1.0.114 hotfix — full bug-prevention contract", () => {
+describe.skip("v1.0.114 hotfix — full bug-prevention contract", () => {
   test("upgrade() now CANNOT silently leave registry+disk in disagreement", () => {
     // The upgrade flow must contain BOTH preflight (pre-write) AND
     // post-write checks. Either alone is insufficient — preflight protects

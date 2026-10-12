@@ -1,4 +1,7 @@
 /**
+ * fork 刻意移除 self-heal/upgrade 接線（20c0fea）：user 自管 plugin cache 路徑，
+ * 無開機/hook 自改寫；上游測試斷言的接線在本 fork 不存在 → skip 保留對照。
+ *
  * Issue #609 — scripts/postinstall.mjs MUST invoke sweepStaleMcpJson
  * alongside healPluginJsonMcpServers so users broken by Claude Code's
  * auto-update carry-forward (or by an earlier /ctx-upgrade tmpdir leak)
@@ -28,7 +31,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..", "..");
 const postinstallSrc = readFileSync(resolve(ROOT, "scripts", "postinstall.mjs"), "utf-8");
 
-describe("scripts/postinstall.mjs — Issue #609 sweep stale .mcp.json", () => {
+describe.skip("scripts/postinstall.mjs — Issue #609 sweep stale .mcp.json", () => {
   test("imports sweepStaleMcpJson from the shared module", () => {
     expect(postinstallSrc).toContain("sweepStaleMcpJson");
     expect(postinstallSrc).toMatch(/heal-installed-plugins\.mjs/);

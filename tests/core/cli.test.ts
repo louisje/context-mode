@@ -18,6 +18,11 @@ import { findMissingLaunchFiles } from "../../src/util/plugin-cache-integrity.js
 
 const ROOT = resolve(import.meta.dirname, "../..");
 
+// fork 刻意移除 cli.ts upgrade() 與 self-heal 接線（20c0fea）：user 自管 plugin
+// cache 路徑，無開機/hook 自改寫；上游測試斷言的接線在本 fork 不存在 → skip 保留對照。
+// 例外：doctor() 本體 fork 保留（#564/#613/#609 檢查都在），僅錨點需修正。
+const FORK_REMOVED = "fork 刻意移除（20c0fea）→ skip 保留對照";
+
 describe("hook dispatch fails OPEN on a missing hook (version-skew brick fix)", () => {
   // A non-zero exit + empty stdout makes GitHub Copilot CLI DENY the tool
   // ("Denied by preToolUse hook (hook errored)"), bricking the agent when a
@@ -103,7 +108,7 @@ describe("cli.bundle.mjs — marketplace install support", () => {
     expect(src).toContain('endsWith("\\\\build")');
   });
 
-  it("cli.ts upgrade copies cli.bundle.mjs to target", () => {
+  it.skip("cli.ts upgrade copies cli.bundle.mjs to target", () => {
     const src = readFileSync(resolve(ROOT, "src", "cli.ts"), "utf-8");
     expect(src).toContain('"cli.bundle.mjs"');
     // Must be in the items array for in-place update
@@ -129,7 +134,7 @@ describe("cli.bundle.mjs — marketplace install support", () => {
     expect(src).toContain("existsSync");
   });
 
-  it("cli.ts upgrade refreshes better-sqlite3 native addon after deps install", () => {
+  it.skip("cli.ts upgrade refreshes better-sqlite3 native addon after deps install", () => {
     const src = readFileSync(resolve(ROOT, "src", "cli.ts"), "utf-8");
     // Extract only the upgrade function body (starts with "async function upgrade")
     const upgradeStart = src.indexOf("async function upgrade");
@@ -149,7 +154,7 @@ describe("cli.bundle.mjs — marketplace install support", () => {
     expect(refreshIdx).toBeLessThan(globalIdx);
   });
 
-  it("cli.ts upgrade chmod handles both cli binaries", () => {
+  it.skip("cli.ts upgrade chmod handles both cli binaries", () => {
     const src = readFileSync(resolve(ROOT, "src", "cli.ts"), "utf-8");
     // Must chmod both build/cli.js and cli.bundle.mjs
     expect(src).toMatch(/for\s*\(.*\["build\/cli\.js",\s*"cli\.bundle\.mjs"\]/);
@@ -157,7 +162,7 @@ describe("cli.bundle.mjs — marketplace install support", () => {
 
   // ── Skill files ────────────────────────────────────────────
 
-  it("ctx-upgrade skill uses cli.bundle.mjs with fallback", () => {
+  it.skip("ctx-upgrade skill uses cli.bundle.mjs with fallback", () => {
     const skill = readFileSync(resolve(ROOT, "skills", "ctx-upgrade", "SKILL.md"), "utf-8");
     expect(skill).toContain("cli.bundle.mjs");
     expect(skill).toContain("build/cli.js");
@@ -195,7 +200,7 @@ describe("cli.bundle.mjs — marketplace install support", () => {
 // ── .mcp.json — MCP server config ────────────────────────────────────
 
 describe(".mcp.json — MCP server config", () => {
-  it("upgrade MUST NOT write `.mcp.json` into the plugin cache dir (Issue #609 architectural lock)", () => {
+  it.skip("upgrade MUST NOT write `.mcp.json` into the plugin cache dir (Issue #609 architectural lock)", () => {
     // Bug-class history this lock protects:
     //   #411 introduced a `.mcp.json` write here with a CLAUDE_PLUGIN_ROOT
     //   placeholder. That solved an absolute-path-bake symptom but kept the
@@ -226,7 +231,7 @@ describe(".mcp.json — MCP server config", () => {
     expect(upgradeSrc).not.toMatch(/writeFileSync\(\s*resolve\(\s*pluginRoot\s*,\s*["']\.mcp\.json["']/);
   });
 
-  it("upgrade MUST sweep stale .mcp.json files post-bump (Issue #609)", () => {
+  it.skip("upgrade MUST sweep stale .mcp.json files post-bump (Issue #609)", () => {
     // Belt-and-braces partner to the no-write lock above: cli.ts MUST call
     // `sweepStaleMcpJson` after `updatePluginRegistry` so any pre-existing
     // copies left by prior versions (or carried forward by Claude Code's
@@ -253,26 +258,20 @@ describe(".mcp.json — MCP server config", () => {
     expect(block).toMatch(/throw new Error/);
   });
 
-  it("plugin manifest keeps ${CLAUDE_PLUGIN_ROOT} for marketplace compatibility", () => {
-    // Marketplace installs read .claude-plugin/plugin.json, not repo-root
-    // .mcp.json. The plugin manifest is the one that must retain the
-    // ${CLAUDE_PLUGIN_ROOT} placeholder so installed plugins resolve their
-    // bundled server path. Repo-root .mcp.json is for contributors opening
-    // the repo as a regular project and uses a relative path to avoid the
-    // "Missing environment variable: CLAUDE_PLUGIN_ROOT" warning.
-    //
-    // We read the COMMITTED file via `git show HEAD:` rather than the
-    // working-tree copy because hooks/normalize-hooks.mjs intentionally
-    // rewrites the on-disk plugin.json to absolute paths on Windows after
-    // postinstall (#378 — MSYS path mangling). The marketplace assertion
-    // is about what we SHIP, not about what local install scripts mutate.
+  it("plugin manifest keeps fork npx launch form (cf47f7a per-file pinning)", () => {
+    // fork invariant（cf47f7a）：plugin.json 是 marketplace 安裝入口，pin
+    // npx --yes louisje/context-mode（抓 GitHub 最新）；.mcp.json.example 才是
+    // 本地開發模板（start.mjs）。兩檔服務不同對象，不要求相等。
+    // 讀 COMMITTED 檔（git show HEAD:）而非工作區副本，理由同上游：
+    // hooks/normalize-hooks.mjs 會在 Windows 上改寫磁碟上的 plugin.json。
     const committed = execSync("git show HEAD:.claude-plugin/plugin.json", {
       cwd: ROOT,
       encoding: "utf-8",
     });
     const plugin = JSON.parse(committed);
-    const args = plugin.mcpServers["context-mode"].args;
-    expect(args[0]).toContain("CLAUDE_PLUGIN_ROOT");
+    const server = plugin.mcpServers["context-mode"];
+    expect(server.command).toBe("npx");
+    expect(server.args).toEqual(["--yes", "louisje/context-mode"]);
   });
 
   it(".mcp.json.example template MUST use ${CLAUDE_PLUGIN_ROOT} placeholder (closes #531)", () => {
@@ -991,7 +990,7 @@ describe("Cross-OS compatibility", () => {
     expect(pkg.scripts["install:openclaw"]).not.toMatch(/^bash /);
   });
 
-  it("cli.ts chmodSync in setup/upgrade is guarded by platform check", () => {
+  it.skip("cli.ts chmodSync in setup/upgrade is guarded by platform check", () => {
     // chmodSync must only run on non-Windows
     const chmodIdx = src.indexOf('chmodSync(binPath');
     expect(chmodIdx).toBeGreaterThan(-1);
@@ -1085,7 +1084,7 @@ describe("Bin entry uses cli.bundle.mjs", () => {
       .toBeLessThan(versionBlock.indexOf('installedVersion === "not installed"'));
   });
 
-  it("upgrade still reaches hook configuration when already on latest", () => {
+  it.skip("upgrade still reaches hook configuration when already on latest", () => {
     const src = readFileSync(resolve(ROOT, "src", "cli.ts"), "utf-8");
     const alreadyLatestIdx = src.indexOf("Already on latest");
     const configureIdx = src.indexOf("Configuring ${adapter.name} hooks");
@@ -1097,7 +1096,7 @@ describe("Bin entry uses cli.bundle.mjs", () => {
     expect(alreadyLatestBlock).not.toContain("return;");
   });
 
-  it("server.ts ctx_upgrade uses cli.bundle.mjs with fallback", () => {
+  it.skip("server.ts ctx_upgrade uses cli.bundle.mjs with fallback", () => {
     const src = readFileSync(resolve(ROOT, "src", "server.ts"), "utf-8");
     // ctx_upgrade handler must prefer cli.bundle.mjs
     const upgradeStart = src.indexOf('server.registerTool(\n  "ctx_upgrade"');
@@ -2479,7 +2478,7 @@ describe("start.mjs CLI self-heal", () => {
 
     // ── Wiring assertions ──
 
-    it("start.mjs invokes the heal before the Algo-D4 integrity check", () => {
+    it.skip("start.mjs invokes the heal before the Algo-D4 integrity check", () => {
       const src = readFileSync(resolve(ROOT, "start.mjs"), "utf-8");
       // Anchor on the literal import + call shape, not the bare filename
       // substring. A DELETED- prefix or comment mention would otherwise
@@ -2496,7 +2495,7 @@ describe("start.mjs CLI self-heal", () => {
       expect(callIdx).toBeLessThan(integrityIdx);
     });
 
-    it("hooks/sessionstart.mjs invokes the heal early in the runHook callback", () => {
+    it.skip("hooks/sessionstart.mjs invokes the heal early in the runHook callback", () => {
       const src = readFileSync(
         resolve(ROOT, "hooks", "sessionstart.mjs"),
         "utf-8",
@@ -2566,7 +2565,7 @@ describe("SKILL.md prefers MCP tool over Bash", () => {
     expect(mcpIdx).toBeLessThan(fallbackIdx);
   });
 
-  it("ctx-upgrade SKILL.md prefers MCP tool over Bash", () => {
+  it.skip("ctx-upgrade SKILL.md prefers MCP tool over Bash", () => {
     const skill = readFileSync(resolve(ROOT, "skills", "ctx-upgrade", "SKILL.md"), "utf-8");
     // Must mention the MCP tool
     expect(skill).toContain("ctx_upgrade");
@@ -2727,14 +2726,14 @@ describe("ctx-upgrade syncs marketplace clone (#418)", () => {
   const upgradeStart = CLI_SOURCE.indexOf("async function upgrade");
   const upgradeBody = CLI_SOURCE.slice(upgradeStart);
 
-  test("upgrade() targets ~/.claude/plugins/marketplaces/context-mode for git refresh", () => {
+  test.skip("upgrade() targets ~/.claude/plugins/marketplaces/context-mode for git refresh", () => {
     // CC's marketplace clone (separate from cache dir) was previously left
     // pinned at the install-time commit; users running /ctx-upgrade never
     // received upstream changes through the marketplace metadata path.
     expect(upgradeBody).toMatch(/marketplaces[\\/]+["']?\s*,\s*["']?context-mode["']?|"marketplaces"\s*,\s*"context-mode"/);
   });
 
-  test("upgrade() runs git fetch + reset against marketplace dir", () => {
+  test.skip("upgrade() runs git fetch + reset against marketplace dir", () => {
     // Required: actual git invocation against the marketplace path.
     // Look for fetch and reset --hard in the upgrade body.
     expect(upgradeBody).toMatch(/execFileSync\(\s*["']git["']\s*,\s*\[\s*["']-C["']/);
@@ -2742,12 +2741,12 @@ describe("ctx-upgrade syncs marketplace clone (#418)", () => {
     expect(upgradeBody).toMatch(/["']reset["'].*?["']--hard["']/s);
   });
 
-  test("upgrade() guards on .git existence so tarball installs do not fail", () => {
+  test.skip("upgrade() guards on .git existence so tarball installs do not fail", () => {
     // Defensive guard — non-git install paths must not error out.
     expect(upgradeBody).toMatch(/existsSync\([^)]*marketplaceDir[^)]*\.git/);
   });
 
-  test("upgrade() preserves user dev edits via git status --porcelain check", () => {
+  test.skip("upgrade() preserves user dev edits via git status --porcelain check", () => {
     // Mert-class users symlink the marketplace clone to a dev worktree.
     // Destructive `reset --hard` would wipe in-progress work — must skip
     // when uncommitted changes exist.
@@ -2766,7 +2765,7 @@ describe("ctx-upgrade swap loop supply-chain containment", () => {
   // pluginRoot. Mirrors the lexical guard pattern that
   // hooks/heal-partial-install.mjs already uses (PR #699).
 
-  test("cli.ts upgrade() rejects swap-loop items that escape pluginRoot or srcDir", () => {
+  test.skip("cli.ts upgrade() rejects swap-loop items that escape pluginRoot or srcDir", () => {
     // The block of interest is bounded by the comment about reading
     // files from the cloned package.json and the next Issue #609 marker.
     const loopBlock = CLI_SOURCE.match(
@@ -2797,7 +2796,7 @@ describe("ctx-upgrade swap loop supply-chain containment", () => {
     );
   });
 
-  test("server.ts inline-fallback upgrade script rejects swap-loop items that escape pluginRoot or srcDir", () => {
+  test.skip("server.ts inline-fallback upgrade script rejects swap-loop items that escape pluginRoot or srcDir", () => {
     // The inline-script lines are literal-string template segments inside
     // the ctx_upgrade handler's scriptLines array, so the guards land as
     // quoted lines in src/server.ts.
@@ -2869,7 +2868,7 @@ describe("Shell-free upgrade (#185)", () => {
   const CLI_SOURCE = readFileSync(resolve(ROOT, "src/cli.ts"), "utf-8");
   const SERVER_SOURCE = readFileSync(resolve(ROOT, "src/server.ts"), "utf-8");
 
-  test("cli.ts upgrade function uses execFileSync, not execSync", () => {
+  test.skip("cli.ts upgrade function uses execFileSync, not execSync", () => {
     // Extract upgrade function body (from "async function upgrade" to end of file)
     const upgradeStart = CLI_SOURCE.indexOf("async function upgrade");
     expect(upgradeStart).toBeGreaterThan(-1);
@@ -2880,7 +2879,7 @@ describe("Shell-free upgrade (#185)", () => {
     expect(execSyncCalls).toBeNull();
   });
 
-  test("cli.ts uses chmodSync instead of execSync chmod", () => {
+  test.skip("cli.ts uses chmodSync instead of execSync chmod", () => {
     const upgradeStart = CLI_SOURCE.indexOf("async function upgrade");
     const upgradeBody = CLI_SOURCE.slice(upgradeStart);
 
@@ -2890,7 +2889,7 @@ describe("Shell-free upgrade (#185)", () => {
     expect(upgradeBody).toContain("chmodSync");
   });
 
-  test("cli.ts upgrade aborts when hook configuration fails instead of reporting success", () => {
+  test.skip("cli.ts upgrade aborts when hook configuration fails instead of reporting success", () => {
     const upgradeStart = CLI_SOURCE.indexOf("async function upgrade");
     expect(upgradeStart).toBeGreaterThan(-1);
     const upgradeBody = CLI_SOURCE.slice(upgradeStart);
@@ -2900,7 +2899,7 @@ describe("Shell-free upgrade (#185)", () => {
     expect(upgradeBody).toMatch(/\}\s*catch\s*\(err: unknown\)\s*\{[\s\S]*throw new Error\(`Hook configuration failed: \$\{message\}`\);/s);
   });
 
-  test("cli.ts entrypoint catches upgrade() rejection and exits non-zero", () => {
+  test.skip("cli.ts entrypoint catches upgrade() rejection and exits non-zero", () => {
     const entryStart = CLI_SOURCE.indexOf("const args = process.argv.slice(2);");
     expect(entryStart).toBeGreaterThan(-1);
     const entryBody = CLI_SOURCE.slice(entryStart, CLI_SOURCE.indexOf("/* -------------------------------------------------------", entryStart + 20));
@@ -2914,7 +2913,7 @@ describe("Shell-free upgrade (#185)", () => {
     expect(entryBody).toContain("process.exit(1);");
   });
 
-  test("cli.ts already-latest path still configures hooks", () => {
+  test.skip("cli.ts already-latest path still configures hooks", () => {
     const upgradeStart = CLI_SOURCE.indexOf("async function upgrade");
     expect(upgradeStart).toBeGreaterThan(-1);
     const upgradeBody = CLI_SOURCE.slice(upgradeStart);
@@ -2926,7 +2925,7 @@ describe("Shell-free upgrade (#185)", () => {
     expect(configureIdx).toBeGreaterThan(alreadyLatestIdx);
   });
 
-  test("cli.ts swap loop guards rm/cp with existsSync(from)", () => {
+  test.skip("cli.ts swap loop guards rm/cp with existsSync(from)", () => {
     // Regression test for the partial-install vector: the rm/cp loop's
     // catch-all was swallowing cpSync failures, so a `files[]` entry
     // that didn't exist in the cloned source dropped the corresponding
@@ -2950,7 +2949,7 @@ describe("Shell-free upgrade (#185)", () => {
     expect(guardIdx).toBeLessThan(rmIdx);
   });
 
-  test("server.ts inline fallback uses execFileSync, not execSync", () => {
+  test.skip("server.ts inline fallback uses execFileSync, not execSync", () => {
     // The inline script template must use execFileSync
     const inlineStart = SERVER_SOURCE.indexOf("Inline fallback");
     expect(inlineStart).toBeGreaterThan(-1);
@@ -2961,7 +2960,7 @@ describe("Shell-free upgrade (#185)", () => {
     expect(inlineSection).not.toMatch(/(?<!File)execSync/);
   });
 
-  test("server.ts inline fallback copies package files including bin", () => {
+  test.skip("server.ts inline fallback copies package files including bin", () => {
     const inlineStart = SERVER_SOURCE.indexOf("Inline fallback");
     expect(inlineStart).toBeGreaterThan(-1);
     const inlineSection = SERVER_SOURCE.slice(inlineStart, SERVER_SOURCE.indexOf("cmd =", inlineStart + 500));
@@ -3004,7 +3003,7 @@ describe("Self-heal hook-path rewriting (#187 + #415 follow-up)", () => {
     expect(PRETOOLUSE_SOURCE).not.toMatch(/entries\.filter\([^)]*!entry\.hooks\?\.some/);
   });
 
-  test("pretooluse.mjs legacy stale-path rewrite still iterates ALL hook types (#187)", () => {
+  test.skip("pretooluse.mjs legacy stale-path rewrite still iterates ALL hook types (#187)", () => {
     // The legacy else-branch (rewrites stale context-mode hook paths to current
     // version dir when hooks.json is absent) must cover all hook types, not just
     // PreToolUse — that was the original #187 fix and remains intact.
@@ -3290,13 +3289,13 @@ describe("Upgrade syncs skills to active install path (#228)", () => {
   const upgradeEnd = CLI_SOURCE.indexOf("\n/* ---", upgradeStart);
   const upgradeBody = CLI_SOURCE.slice(upgradeStart, upgradeEnd > 0 ? upgradeEnd : undefined);
 
-  test("upgrade reads installed_plugins.json to find active install path", () => {
+  test.skip("upgrade reads installed_plugins.json to find active install path", () => {
     expect(upgradeBody).toContain("installed_plugins.json");
     expect(upgradeBody).toContain("context-mode@context-mode");
     expect(upgradeBody).toContain("installPath");
   });
 
-  test("upgrade only syncs when installPath differs from pluginRoot", () => {
+  test.skip("upgrade only syncs when installPath differs from pluginRoot", () => {
     // Must short-circuit when installPath === pluginRoot before copying.
     // Accept either the original `installPath !== pluginRoot` conjunction
     // form OR the refactored early-continue form (`if (installPath ===
@@ -3313,11 +3312,11 @@ describe("Upgrade syncs skills to active install path (#228)", () => {
     expect(syncSection).not.toContain("readdirSync");
   });
 
-  test("upgrade warns user to restart for new MCP tools", () => {
+  test.skip("upgrade warns user to restart for new MCP tools", () => {
     expect(upgradeBody).toMatch(/[Rr]estart.*MCP|new MCP tools/i);
   });
 
-  test("restart hint is adapter-aware (Claude Code gets /reload-plugins)", () => {
+  test.skip("restart hint is adapter-aware (Claude Code gets /reload-plugins)", () => {
     expect(upgradeBody).toContain("reload-plugins");
     expect(upgradeBody).toContain('adapter.name === "Claude Code"');
   });
@@ -3336,7 +3335,7 @@ describe("installed_plugins.json installPath containment", () => {
 
   const CLI_SOURCE = readFileSync(resolve(ROOT, "src/cli.ts"), "utf-8");
 
-  test("upgrade() skills cpSync gates installPath under <claudeRoot>/plugins/cache", () => {
+  test.skip("upgrade() skills cpSync gates installPath under <claudeRoot>/plugins/cache", () => {
     // Bound the slice to the upgrade() skills-sync block.
     const upgradeStart = CLI_SOURCE.indexOf("async function upgrade");
     expect(upgradeStart).toBeGreaterThan(0);
@@ -3496,7 +3495,7 @@ describe("installed_plugins.json installPath containment", () => {
 
   const SERVER_SOURCE = readFileSync(resolve(ROOT, "src/server.ts"), "utf-8");
 
-  test("server.ts: healCacheMidSession canonicalizes cacheRoot with realpathSync (#795)", () => {
+  test.skip("server.ts: healCacheMidSession canonicalizes cacheRoot with realpathSync (#795)", () => {
     // Locate the healCacheMidSession function body.
     const healStart = SERVER_SOURCE.indexOf("function healCacheMidSession");
     expect(healStart).toBeGreaterThan(0);
@@ -3765,9 +3764,8 @@ describe("Issue #564 — doctor() flags Linux + Node < 22.5 + no Bun", () => {
   function doctorBody(): string {
     const start = CLI_SRC.indexOf("async function doctor(");
     expect(start).toBeGreaterThan(-1);
-    // doctor() spans ~300 lines; grab a generous window that ends before
-    // the next top-level function declaration (`async function insight`).
-    const end = CLI_SRC.indexOf("async function insight", start);
+    // fork 移除 insight 指令 → 錨點改用 fork 實際的下一個函數 statuslineForward
+    const end = CLI_SRC.indexOf("function statuslineForward", start);
     expect(end).toBeGreaterThan(start);
     return CLI_SRC.slice(start, end);
   }
@@ -3816,7 +3814,7 @@ describe("Upgrade native ABI bootstrap", () => {
   const upgradeStart = CLI_SOURCE.indexOf("async function upgrade");
   const upgradeBody = CLI_SOURCE.slice(upgradeStart);
 
-  it("delegates native compatibility to hooks/ensure-deps.mjs", () => {
+  it.skip("delegates native compatibility to hooks/ensure-deps.mjs", () => {
     const rebuildStartIdx = upgradeBody.indexOf("Verifying native addon ABI");
     expect(rebuildStartIdx).toBeGreaterThan(-1);
     const region = upgradeBody.slice(
@@ -3829,7 +3827,7 @@ describe("Upgrade native ABI bootstrap", () => {
     expect(region).not.toContain("binding present");
   });
 
-  it("uses the current ABI cache as the native-addon success marker", () => {
+  it.skip("uses the current ABI cache as the native-addon success marker", () => {
     const rebuildStartIdx = upgradeBody.indexOf("Verifying native addon ABI");
     expect(rebuildStartIdx).toBeGreaterThan(-1);
     const region = upgradeBody.slice(rebuildStartIdx, rebuildStartIdx + 1500);
@@ -3882,7 +3880,8 @@ describe("PR #620 slice 4 — doctor() surfaces persistence-tier bug class", () 
   function doctorBody(): string {
     const start = CLI_SRC.indexOf("async function doctor(");
     expect(start).toBeGreaterThan(-1);
-    const end = CLI_SRC.indexOf("async function insight", start);
+    // fork 移除 insight 指令 → 錨點改用 fork 實際的下一個函數 statuslineForward
+    const end = CLI_SRC.indexOf("function statuslineForward", start);
     expect(end).toBeGreaterThan(start);
     return CLI_SRC.slice(start, end);
   }

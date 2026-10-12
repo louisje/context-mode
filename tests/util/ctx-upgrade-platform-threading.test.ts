@@ -1,4 +1,7 @@
 /**
+ * fork 刻意移除 self-heal/upgrade 接線（20c0fea）：user 自管 plugin cache 路徑，
+ * 無開機/hook 自改寫；上游測試斷言的接線在本 fork 不存在 → skip 保留對照。
+ *
  * Issue #542 — ctx_upgrade MCP handler MUST thread MCP clientInfo into
  * the spawned `upgrade` process so the upgrade flow honors the
  * highest-confidence detection tier instead of falling through to the
@@ -41,7 +44,7 @@ const upgradeRegisterIdx = serverSrc.indexOf('"ctx_upgrade"');
 const upgradeHandlerEnd = serverSrc.indexOf("// ── ctx-purge", upgradeRegisterIdx);
 const ctxUpgradeHandler = serverSrc.slice(upgradeRegisterIdx, upgradeHandlerEnd);
 
-describe("ctx_upgrade MCP handler threads clientInfo (issue #542)", () => {
+describe.skip("ctx_upgrade MCP handler threads clientInfo (issue #542)", () => {
   test("handler captures clientInfo via server.getClientVersion()", () => {
     // Must read the live MCP clientInfo — not a stale module-level copy.
     expect(ctxUpgradeHandler).toMatch(/server\.server\.getClientVersion\(\)/);
@@ -61,7 +64,7 @@ describe("ctx_upgrade MCP handler threads clientInfo (issue #542)", () => {
   });
 });
 
-describe("cli.ts upgrade() honors --platform flag (issue #542)", () => {
+describe.skip("cli.ts upgrade() honors --platform flag (issue #542)", () => {
   test("argv parse extracts --platform <id> before invoking upgrade()", () => {
     // The entry-point switch (cli.ts:141) must forward the flag — either
     // as a function argument or by setting CONTEXT_MODE_PLATFORM env var

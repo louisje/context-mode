@@ -20,6 +20,16 @@ import { startLifecycleGuard, makeDefaultIsParentAlive, bridgeChildIdleTimeoutMs
 // it's `tsx` with `which`.
 function resolveTsxPath(): string {
   const isWindows = process.platform === "win32";
+  // 優先 dist/cli.mjs：npm 在某些佈局下把 .bin/tsx 裝成真檔案複製而非 symlink，
+  // 相對 import（./package-*.mjs）解析到 .bin/ 而非 dist/ → ERR_MODULE_NOT_FOUND。
+  const distCli = join(
+    process.cwd(),
+    "node_modules",
+    "tsx",
+    "dist",
+    isWindows ? "cli.cjs" : "cli.mjs",
+  );
+  if (existsSync(distCli)) return distCli;
   const localBin = join(
     process.cwd(),
     "node_modules",

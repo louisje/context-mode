@@ -92,7 +92,7 @@ describe("Kiro hooks", () => {
       expect(result.exitCode).toBe(0);
     });
 
-    test("exits 2 for blocked curl commands", () => {
+    test("passes curl commands through (9e2cf93 soften: ask → kiro passthrough)", () => {
       const result = runHook("pretooluse.mjs", {
         hook_event_name: "preToolUse",
         cwd: tempDir,
@@ -100,11 +100,11 @@ describe("Kiro hooks", () => {
         tool_input: { command: "curl https://example.com" },
       });
 
-      // stderr is suppressed at OS fd level by suppress-stderr.mjs
-      expect(result.exitCode).toBe(2);
+      // fork 9e2cf93：curl/wget 從 modify(exit 2) 改為 ask → kiro 無 ask 概念 → exit 0
+      expect(result.exitCode).toBe(0);
     });
 
-    test("exits 2 for blocked wget commands", () => {
+    test("passes wget commands through (9e2cf93 soften: ask → kiro passthrough)", () => {
       const result = runHook("pretooluse.mjs", {
         hook_event_name: "preToolUse",
         cwd: tempDir,
@@ -112,8 +112,8 @@ describe("Kiro hooks", () => {
         tool_input: { command: "wget https://example.com -O out.html" },
       });
 
-      // stderr is suppressed at OS fd level by suppress-stderr.mjs
-      expect(result.exitCode).toBe(2);
+      // fork 9e2cf93：wget 從 modify(exit 2) 改為 ask → kiro 無 ask 概念 → exit 0
+      expect(result.exitCode).toBe(0);
     });
 
     test("exits 0 for git commands (allowed short-output shell)", () => {

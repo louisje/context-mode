@@ -379,7 +379,7 @@ describe("OpenClawPlugin", () => {
   // ── before_tool_call ──────────────────────────────────
 
   describe("before_tool_call", () => {
-    it("modifies curl commands to block them", async () => {
+    it("blocks curl commands with an ask decision (9e2cf93 soften)", async () => {
       const mock = await createTestPlugin(join(tempDir, "before-curl"));
       const beforeHook = mock.lifecycle.find((h) => h.event === "before_tool_call");
       expect(beforeHook).toBeDefined();
@@ -387,24 +387,26 @@ describe("OpenClawPlugin", () => {
       const params = { command: "curl https://example.com/data" };
       const event = { toolName: "Bash", params };
 
-      await beforeHook!.handler(event);
+      const result = await beforeHook!.handler(event);
 
-      // Routing replaces the curl command with an informative echo
-      expect(params.command).toMatch(/^echo /);
-      expect(params.command).toContain("context-mode");
+      // fork 9e2cf93：curl/wget 從 modify-echo 改為 ask（block + 建議理由）
+      expect(result).toMatchObject({ block: true });
+      expect((result as { blockReason?: string }).blockReason).toContain("context-mode");
+      expect(params.command).toBe("curl https://example.com/data");
     });
 
-    it("modifies wget commands to block them", async () => {
+    it("blocks wget commands with an ask decision (9e2cf93 soften)", async () => {
       const mock = await createTestPlugin(join(tempDir, "before-wget"));
       const beforeHook = mock.lifecycle.find((h) => h.event === "before_tool_call");
 
       const params = { command: "wget https://example.com/file" };
       const event = { toolName: "Bash", params };
 
-      await beforeHook!.handler(event);
+      const result = await beforeHook!.handler(event);
 
-      expect(params.command).toMatch(/^echo /);
-      expect(params.command).toContain("context-mode");
+      expect(result).toMatchObject({ block: true });
+      expect((result as { blockReason?: string }).blockReason).toContain("context-mode");
+      expect(params.command).toBe("wget https://example.com/file");
     });
 
     it("passes through normal tool calls", async () => {
@@ -603,8 +605,9 @@ describe("OpenClawPlugin", () => {
     });
   });
 
-  // ── SLICE OClaw-1: registerTool exposes 11 ctx_* MCP tools ────────
+  // ── SLICE OClaw-1: registerTool exposes 9 ctx_* MCP tools ────────
   describe("registerTool (SLICE OClaw-1 — sidecar MCP)", () => {
+    // fork 移除 ctx_upgrade/ctx_insight（離線原則）→ 11-2=9
     const EXPECTED_NAMES = [
       "ctx_execute",
       "ctx_execute_file",
@@ -614,12 +617,10 @@ describe("OpenClawPlugin", () => {
       "ctx_batch_execute",
       "ctx_stats",
       "ctx_doctor",
-      "ctx_upgrade",
       "ctx_purge",
-      "ctx_insight",
     ] as const;
 
-    it("registers all 11 ctx_* tools via api.registerTool", async () => {
+    it("registers all 9 ctx_* tools via api.registerTool", async () => {
       const mock = await createTestPlugin(join(tempDir, "register-tool"));
       const names = mock.tools.map((t) => t.name);
       for (const expected of EXPECTED_NAMES) {
@@ -898,16 +899,17 @@ describe("OpenClawPlugin", () => {
       expect(result.compacted).toBe(false);
     });
 
-    it("blocked tool command is replaced before execution", async () => {
+    it("blocked tool command is blocked before execution (9e2cf93 ask)", async () => {
       const mock = await createTestPlugin(join(tempDir, "e2e-block"));
       const beforeHook = mock.lifecycle.find((h) => h.event === "before_tool_call");
 
       const params = { command: "curl https://evil.com" };
       const event = { toolName: "Bash", params };
 
-      // Before hook replaces the command
-      await beforeHook!.handler(event);
-      expect(params.command).toContain("context-mode");
+      // Before hook blocks with an ask decision (fork 9e2cf93)
+      const result = await beforeHook!.handler(event);
+      expect(result).toMatchObject({ block: true });
+      expect(params.command).toBe("curl https://evil.com");
     });
   });
 

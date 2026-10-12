@@ -1,4 +1,7 @@
 /**
+ * fork 刻意移除 MCP boot 背景安裝（4774441 離線原則：start.mjs 不 spawn npm，
+ * fetch deps 預先本地安裝）→ 上游 #861/boot-install 斷言無對象 → skip 保留對照。
+ *
  * start.mjs boot-time fetch-dep install MUST NOT EPERM on Windows — closes #861.
  *
  * The background install of the three optional fetch deps (turndown,
@@ -50,13 +53,18 @@ function sliceBetween(src: string, startAnchor: string, endAnchor: string): stri
   return src.slice(start, end);
 }
 
-describe("start.mjs Windows boot-install cwd handling (#861)", () => {
-  const BLOCK = sliceBetween(
-    START_MJS,
-    "const NPM_INSTALL_BG_PKGS",
-    "// Self-heal: create CLI shim",
-  );
-  const compact = stripWs(BLOCK);
+describe.skip("start.mjs Windows boot-install cwd handling (#861)", () => {
+  // lazy：fork 移除 NPM_INSTALL_BG_PKGS 區塊，collection 時直接算會 throw
+  let compact = "";
+  let BLOCK = "";
+  try {
+    BLOCK = sliceBetween(
+      START_MJS,
+      "const NPM_INSTALL_BG_PKGS",
+      "// Self-heal: create CLI shim",
+    );
+    compact = stripWs(BLOCK);
+  } catch { /* fork 移除 → skip */ }
 
   it("prefers invoking npm's CLI through node with shell:false (cwd honored)", () => {
     expect(compact).toContain("npm-cli.js");
@@ -95,7 +103,7 @@ describe("start.mjs Windows boot-install cwd handling (#861)", () => {
   });
 });
 
-describe("runtime property the #861 fix relies on", () => {
+describe.skip("runtime property the #861 fix relies on", () => {
   it("spawn with shell:false honors the cwd option (the fix's guarantee)", () => {
     const d = realpathSync(mkdtempSync(join(tmpdir(), "cm861-")));
     const r = spawnSync(

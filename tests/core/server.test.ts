@@ -2196,7 +2196,8 @@ if (LIVE) {
 // ctx_upgrade: inline fallback for missing CLI files
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("ctx_upgrade tool: inline fallback for missing CLI", () => {
+// fork 刻意移除 ctx_upgrade（20c0fea / 離線原則：上游 fallback 會 git-clone 重建覆蓋安裝目錄）→ skip 保留對照
+describe.skip("ctx_upgrade tool: inline fallback for missing CLI", () => {
   const serverSrc = readFileSync(
     resolve(__dirname, "../../src/server.ts"),
     "utf-8",
@@ -2276,7 +2277,8 @@ describe("ctx_upgrade tool: inline fallback for missing CLI", () => {
   //    block (which was the exact bug PR #469 fixed for ctx_insight). The
   //    orphan call site at the top of the ctx_upgrade handler still carried
   //    the broken pattern. Lock that down here.
-  describe("ctx_upgrade insight-cache cleanup uses killProcessOnPort (#469 follow-up)", () => {
+  // fork 刻意移除 ctx_upgrade → 其註冊區塊不存在，斷言無對象 → skip
+  describe.skip("ctx_upgrade insight-cache cleanup uses killProcessOnPort (#469 follow-up)", () => {
     // Scope assertions to the ctx_upgrade tool registration body so we don't
     // accidentally match the shared killProcessOnPort helper definition or
     // its tests below in the same file.
@@ -2896,7 +2898,8 @@ describe("Version outdated warning in trackResponse", () => {
     "utf-8",
   );
 
-  test("fetchLatestVersion function exists and uses npm registry", () => {
+  // fork 刻意移除 npm 版本檢查（離線原則：不連 registry.npmjs.org）→ skip
+  test.skip("fetchLatestVersion function exists and uses npm registry", () => {
     expect(serverSrc).toContain("function fetchLatestVersion");
     expect(serverSrc).toContain("registry.npmjs.org/context-mode");
   });
@@ -5353,9 +5356,10 @@ describe("tool description style contract (#683 ADR-0002)", () => {
   // meets the canonical contract enforced below.
   const EXEMPT_FROM_FORBIDDEN_TOKENS = new Set<string>([]);
 
-  test("at least 11 ctx_* tools are registered", () => {
+  test("at least 9 ctx_* tools are registered", () => {
     // Sanity check that the extractor found the corpus.
-    expect(tools.length).toBeGreaterThanOrEqual(11);
+    // fork 移除 ctx_upgrade/ctx_insight → 11-2=9
+    expect(tools.length).toBeGreaterThanOrEqual(9);
   });
 
   // Forbidden tokens per ADR-0002. Each pattern is documented inline so
@@ -5929,8 +5933,9 @@ describe("tool description source form contract (#683 PR follow-up)", () => {
     "ctx_insight",
   ]);
 
-  test("at least 11 ctx_* tools surfaced for source-form contract", () => {
-    expect(blocks.length).toBeGreaterThanOrEqual(11);
+  test("at least 9 ctx_* tools surfaced for source-form contract", () => {
+    // fork 移除 ctx_upgrade/ctx_insight → 11-2=9
+    expect(blocks.length).toBeGreaterThanOrEqual(9);
   });
 
   for (const block of blocks) {
@@ -6355,7 +6360,8 @@ describe("getStatsFilePath: sanitize CLAUDE_SESSION_ID before path.join", () => 
 // Cross-platform audit follow-up — schema/observability fixes for #696 #697
 // ═══════════════════════════════════════════════════════════════════════════
 
-describe("ctx_insight schema description (issue #697)", () => {
+// fork 刻意移除 ctx_insight（上游會開 context-mode.com/insight 外連瀏覽器）→ skip 保留對照
+describe.skip("ctx_insight schema description (issue #697)", () => {
   const serverSrc = readFileSync(
     resolve(__dirname, "../../src/server.ts"),
     "utf-8",
@@ -6667,6 +6673,7 @@ describe("ctx_* MCP tool annotations (#846)", () => {
     openWorldHint: boolean;
   };
   // Classified by real behavior (no blanket readOnlyHint).
+  // fork 移除 ctx_upgrade/ctx_insight → EXPECTED 只留 fork 實際註冊的 9 個
   const EXPECTED: Record<string, Hints> = {
     ctx_execute:         { readOnlyHint: false, destructiveHint: true,  idempotentHint: false, openWorldHint: true  },
     ctx_execute_file:    { readOnlyHint: false, destructiveHint: true,  idempotentHint: false, openWorldHint: true  },
@@ -6678,7 +6685,6 @@ describe("ctx_* MCP tool annotations (#846)", () => {
     ctx_doctor:          { readOnlyHint: true,  destructiveHint: false, idempotentHint: true,  openWorldHint: false },
     ctx_upgrade:         { readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: false },
     ctx_purge:           { readOnlyHint: false, destructiveHint: true,  idempotentHint: true,  openWorldHint: false },
-    ctx_insight:         { readOnlyHint: false, destructiveHint: false, idempotentHint: true,  openWorldHint: true  },
   };
   const tools = REGISTERED_CTX_TOOLS as Array<{ name: string; config: { annotations?: Hints } }>;
   const find = (name: string) => tools.find((t) => t.name === name);
@@ -6705,7 +6711,7 @@ describe("ctx_* MCP tool annotations (#846)", () => {
   test("never blanket-marks executing/mutating/destructive tools read-only", () => {
     for (const name of [
       "ctx_execute", "ctx_execute_file", "ctx_batch_execute", "ctx_index",
-      "ctx_fetch_and_index", "ctx_purge", "ctx_upgrade", "ctx_insight",
+      "ctx_fetch_and_index", "ctx_purge",
     ]) {
       expect(find(name)!.config.annotations!.readOnlyHint).toBe(false);
     }

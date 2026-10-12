@@ -95,11 +95,10 @@ describe("ContextModePlugin", () => {
         "ctx_execute_file",
         "ctx_fetch_and_index",
         "ctx_index",
-        "ctx_insight",
+        // fork 移除 ctx_insight/ctx_upgrade（離線原則）→ 9 個
         "ctx_purge",
         "ctx_search",
         "ctx_stats",
-        "ctx_upgrade",
       ]);
     });
 

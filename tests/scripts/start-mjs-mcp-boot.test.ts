@@ -1,4 +1,7 @@
 /**
+ * fork 刻意移除 MCP boot 背景安裝（4774441 離線原則：start.mjs 不 spawn npm，
+ * fetch deps 預先本地安裝）→ 上游 #861/boot-install 斷言無對象 → skip 保留對照。
+ *
  * start.mjs MCP-boot non-blocking contract — closes #634.
  *
  * Before #634, `start.mjs` invoked `execSync("npm install …")` synchronously
@@ -26,7 +29,7 @@ import { resolve } from "node:path";
 const REPO_ROOT = resolve(__dirname, "..", "..");
 const START_MJS = readFileSync(resolve(REPO_ROOT, "start.mjs"), "utf8");
 
-describe("start.mjs MCP boot path", () => {
+describe.skip("start.mjs MCP boot path", () => {
   it("does NOT synchronously `execSync(\"npm install …\")` the fetch-and-index deps on the MCP boot path", () => {
     // The three packages are referenced by `ctx_fetch_and_index`'s
     // sandboxed subprocess via `require.resolve()` and are NOT needed for

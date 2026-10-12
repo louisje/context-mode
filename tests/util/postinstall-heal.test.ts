@@ -1,4 +1,7 @@
 /**
+ * fork 刻意移除 self-heal/upgrade 接線（20c0fea）：user 自管 plugin cache 路徑，
+ * 無開機/hook 自改寫；上游測試斷言的接線在本 fork 不存在 → skip 保留對照。
+ *
  * scripts/postinstall.mjs — installed_plugins.json self-heal contract.
  *
  * v1.0.114 hotfix for users broken by v1.0.113's `/ctx-upgrade`. Their
@@ -185,7 +188,7 @@ describe("postinstall — non-global install (contributor `npm install`)", () =>
 // Slice 6 — global install with poisoned registry: heal happens
 // ─────────────────────────────────────────────────────────────────────────
 
-describe("postinstall — global install with poisoned registry", () => {
+describe.skip("postinstall — global install with poisoned registry", () => {
   // 90s budget — see L163/L246/L465 for the same precedent. Section 3 of
   // postinstall.mjs (heal-better-sqlite3) routinely takes 20-30s on cold
   // macOS GHA runners, blowing past vitest's default 30s. CI run
@@ -222,7 +225,7 @@ describe("postinstall — global install with poisoned registry", () => {
 // Slice 7 — global install but no Claude Code registry: silent OK
 // ─────────────────────────────────────────────────────────────────────────
 
-describe("postinstall — global install, user not on Claude Code", () => {
+describe.skip("postinstall — global install, user not on Claude Code", () => {
   // 90s budget for the same reason as siblings (L163/L185/L246/L465) —
   // heal-better-sqlite3 in section 3 of postinstall.mjs is the slow path
   // and shares this whole-process budget on every spawn.
@@ -464,7 +467,7 @@ describe("normalize-hooks — /ctx-upgrade post-cpSync sequence (issue #528)", (
 // Slice 8 — registry already healthy: "no heal needed" line
 // ─────────────────────────────────────────────────────────────────────────
 
-describe("postinstall — global install, registry already healthy", () => {
+describe.skip("postinstall — global install, registry already healthy", () => {
   // The vitest default test timeout is 30s; this test path runs the real
   // `heal-better-sqlite3.mjs` (section 3 of postinstall.mjs) which alone
   // can take 20-30s on cold CI runners. Sibling tests in this file

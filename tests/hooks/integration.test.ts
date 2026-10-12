@@ -671,7 +671,8 @@ describe("Skill Commands", () => {
     assert.ok(content.includes("/context-mode:ctx-doctor"), "Trigger must reference ctx-doctor");
   });
 
-  test("ctx-upgrade skill directory exists with valid SKILL.md", () => {
+  test.skip("ctx-upgrade skill directory exists with valid SKILL.md", () => {
+    // fork 刻意移除 ctx-upgrade skill（離線原則：無 tool 自我升級）→ skip
     const skillMd = join(SKILLS_DIR, "ctx-upgrade", "SKILL.md");
     assert.ok(existsSync(skillMd), "skills/ctx-upgrade/SKILL.md must exist");
     const content = readFileSync(skillMd, "utf-8");

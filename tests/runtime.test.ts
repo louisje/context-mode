@@ -588,7 +588,7 @@ describe("runnableExists — Windows MS Store stub filter (#454)", () => {
     expect(execSync).toHaveBeenCalledWith('"py" --version', expect.anything());
   });
 
-  test("non-Windows uses 1500ms probe timeout (faster cold detect)", async () => {
+  test("non-Windows skips the --version probe (4424ba7: command -v is sufficient)", async () => {
     // Restore non-Windows platform for this case.
     Object.defineProperty(process, "platform", { value: "linux", configurable: true });
 
@@ -602,15 +602,9 @@ describe("runnableExists — Windows MS Store stub filter (#454)", () => {
     const { detectRuntimes } = await import("../src/runtime.js");
     detectRuntimes();
 
-    // Verify --version probes used the tightened 1500ms timeout on non-Windows.
-    const probeCalls = execFileSync.mock.calls.filter(
-      (c) => Array.isArray(c[1]) && c[1][0] === "--version",
-    );
-    expect(probeCalls.length).toBeGreaterThan(0);
-    for (const call of probeCalls) {
-      const opts = call[2] as { timeout?: number };
-      expect(opts.timeout).toBe(1500);
-    }
+    // fork 4424ba7：POSIX 不再跑 --version liveness probe（pyenv shim rehash
+    // 可能 block 數秒，延遲 MCP initialize 超過 VS Code 5s 寬限）。
+    expect(execFileSync).not.toHaveBeenCalled();
   });
 });
 

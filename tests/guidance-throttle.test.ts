@@ -74,12 +74,13 @@ describe("guidance throttle", () => {
   });
 
   it("deny/modify actions are NEVER throttled", () => {
-    // WebFetch deny should always fire
+    // fork 9e2cf93：WebFetch 從 deny 改為 ask（永不 throttle 的語意不變——
+    // throttle 只作用於 context nudge，ask/deny/modify 都不經 throttle）
     const d1 = routePreToolUse("WebFetch", { url: "https://example.com" }, PROJECT_DIR);
     const d2 = routePreToolUse("WebFetch", { url: "https://other.com" }, PROJECT_DIR);
 
-    expect(d1?.action).toBe("deny");
-    expect(d2?.action).toBe("deny");
+    expect(d1?.action).toBe("ask");
+    expect(d2?.action).toBe("ask");
   });
 
   it("resetGuidanceThrottle clears state (simulates new session)", () => {

@@ -1,4 +1,7 @@
 /**
+ * fork 刻意移除 openInBrowser（4774441 離線原則：不開瀏覽器外連）→
+ * 上游 shell-injection 測試無對象 → skip 保留對照。
+ *
  * openInBrowser — shell-injection regression test
  *
  * Original implementation used `execSync(`open "${url}"`)` which shell-
@@ -23,7 +26,7 @@ afterAll(() => {
   try { if (existsSync(PWNED)) unlinkSync(PWNED); } catch {}
 });
 
-describe("openInBrowser — shell injection hardening", () => {
+describe.skip("openInBrowser — shell injection hardening", () => {
   test("darwin: passes URL as single argv element, no shell interpolation", () => {
     const calls: Array<{ file: string; args: readonly string[] }> = [];
     const fakeExecFile = (file: string, args: readonly string[], _opts?: unknown) => {
