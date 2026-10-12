@@ -11,13 +11,21 @@
 //                                              "package.json files[] MUST NOT ship
 //                                              .mcp.json".)
 //   2. `.claude-plugin/plugin.json`           (Claude Code's primary read path
-//                                              for installed plugins. cli.ts
-//                                              upgrade() writes a matching
-//                                              .mcp.json into the plugin cache.)
+//                                              for installed plugins.)
 //
-// If the two source-tracked files drift, fresh installs break silently
-// (the #253 regression survived a full release cycle because no invariant
-// caught the bare `./start.mjs` shape).
+// Fork decision (e09fcfb): the two files serve DIFFERENT audiences and are
+// intentionally asymmetric —
+//
+//   .mcp.json.example          → node ${CLAUDE_PLUGIN_ROOT}/start.mjs
+//                                (contributors: launch the local checkout build)
+//   .claude-plugin/plugin.json → npx --yes louisje/context-mode
+//                                (marketplace installs: always latest from
+//                                GitHub; no CLAUDE_PLUGIN_ROOT dependency)
+//
+// So the upstream "both files must agree" rule is relaxed to: each file must
+// pin its OWN canonical launch form. Drift in either file still fails the
+// build — the #253 regression class (a silently broken fresh install) stays
+// caught; only the cross-file equality requirement is dropped.
 //
 // This script is the build-chain half of the slice-9 invariant pair.
 // The vitest sibling (tests/scripts/asymmetric-drift-assert.test.ts) covers
@@ -26,11 +34,10 @@
 //
 // Contract:
 //   - Read `.mcp.json.example` and `.claude-plugin/plugin.json` from --root.
-//   - Extract mcpServers["context-mode"].args[0] from each.
-//   - Assert both equal the literal `${CLAUDE_PLUGIN_ROOT}/start.mjs`.
-//   - Assert the two values are equal (the explicit drift check).
-//   - If a `.mcp.json` exists (contributor's local copy), check it too —
-//     but absence is fine (it's .gitignored).
+//   - Assert .mcp.json.example mcpServers["context-mode"] == CANONICAL_EXAMPLE.
+//   - Assert .claude-plugin/plugin.json mcpServers["context-mode"] == CANONICAL_PLUGIN.
+//   - If a `.mcp.json` exists (contributor's local copy), check it against
+//     CANONICAL_EXAMPLE too — but absence is fine (it's .gitignored).
 //   - Exit 0 on success, 1 with a violations report on failure.
 //
 // Usage:
@@ -42,6 +49,9 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const PLACEHOLDER = "${CLAUDE_PLUGIN_ROOT}/start.mjs";
+const CANONICAL_EXAMPLE = { command: "node", args: [PLACEHOLDER] };
+// Fork intent (e09fcfb): marketplace installs launch via npx from GitHub.
+const CANONICAL_PLUGIN = { command: "npx", args: ["--yes", "louisje/context-mode"] };
 const PLUGIN_KEY = "context-mode";
 const SKILLS_PATH = "./skills/";
 const REQUIRED_PLUGIN_RUNTIME_FILES = [
@@ -61,7 +71,7 @@ function parseArgs(argv) {
   return out;
 }
 
-function readArgs0(filePath) {
+function readServer(filePath) {
   if (!existsSync(filePath)) return { ok: false, error: `missing: ${filePath}` };
   let parsed;
   try {
@@ -77,11 +87,19 @@ function readArgs0(filePath) {
   if (!ours || typeof ours !== "object" || !Array.isArray(ours.args) || ours.args.length === 0) {
     return { ok: false, error: `no args[] for ${PLUGIN_KEY} in ${filePath}` };
   }
-  const a0 = ours.args[0];
-  if (typeof a0 !== "string") {
-    return { ok: false, error: `args[0] not a string in ${filePath}` };
-  }
-  return { ok: true, value: a0 };
+  return { ok: true, command: ours.command, args: ours.args };
+}
+
+function serverMatches(got, want) {
+  return (
+    got.command === want.command &&
+    got.args.length === want.args.length &&
+    want.args.every((a, i) => got.args[i] === a)
+  );
+}
+
+function formatServer(s) {
+  return JSON.stringify({ command: s.command, args: s.args });
 }
 
 function readJson(filePath) {
@@ -107,27 +125,23 @@ function main() {
   /** @type {string[]} */
   const violations = [];
 
-  const example = readArgs0(exampleJsonPath);
-  const plg = readArgs0(pluginJsonPath);
+  const example = readServer(exampleJsonPath);
+  const plg = readServer(pluginJsonPath);
   const pluginJson = readJson(pluginJsonPath);
 
   if (!example.ok) violations.push(example.error);
   if (!plg.ok) violations.push(plg.error);
 
-  if (example.ok && example.value !== PLACEHOLDER) {
+  if (example.ok && !serverMatches(example, CANONICAL_EXAMPLE)) {
     violations.push(
-      `.mcp.json.example args[0] is "${example.value}" but must equal "${PLACEHOLDER}". ` +
+      `.mcp.json.example mcpServers["${PLUGIN_KEY}"] is ${formatServer(example)} but must be ${formatServer(CANONICAL_EXAMPLE)}. ` +
         `Contributors copy this template to .mcp.json for local dev, so the template MUST hold the canonical form. (Issue #531 / #253 class.)`,
     );
   }
-  if (plg.ok && plg.value !== PLACEHOLDER) {
+  if (plg.ok && !serverMatches(plg, CANONICAL_PLUGIN)) {
     violations.push(
-      `.claude-plugin/plugin.json args[0] is "${plg.value}" but must equal "${PLACEHOLDER}". (Issue #523 class.)`,
-    );
-  }
-  if (example.ok && plg.ok && example.value !== plg.value) {
-    violations.push(
-      `asymmetric drift: .mcp.json.example args[0]="${example.value}" vs .claude-plugin/plugin.json args[0]="${plg.value}". The two source-tracked manifests MUST agree so contributors copying the template and end-users via marketplace install resolve the same start.mjs.`,
+      `.claude-plugin/plugin.json mcpServers["${PLUGIN_KEY}"] is ${formatServer(plg)} but must be the fork npx form ${formatServer(CANONICAL_PLUGIN)} — drift. ` +
+        `Marketplace installs launch via npx from GitHub (fork intent, e09fcfb); do not "fix" this back to start.mjs.`,
     );
   }
 
@@ -157,11 +171,11 @@ function main() {
   // Contributor's local .mcp.json (if present) — must match the template.
   // Absence is fine; the file is .gitignored after the #531 architectural untrack.
   if (existsSync(localMcpJsonPath)) {
-    const local = readArgs0(localMcpJsonPath);
-    if (local.ok && local.value !== PLACEHOLDER) {
+    const local = readServer(localMcpJsonPath);
+    if (local.ok && !serverMatches(local, CANONICAL_EXAMPLE)) {
       violations.push(
-        `local .mcp.json args[0] is "${local.value}" but must equal "${PLACEHOLDER}". ` +
-          `If you intentionally use a relative dev path locally, ignore — but this file would ship the regression if it ever lands in package.json files[]. Consider \`cp .mcp.json.example .mcp.json\` to reset.`,
+        `local .mcp.json mcpServers["${PLUGIN_KEY}"] is ${formatServer(local)} but must be ${formatServer(CANONICAL_EXAMPLE)}. ` +
+          `If you intentionally use a different launch form locally, ignore — but this file would ship the regression if it ever lands in package.json files[]. Consider \`cp .mcp.json.example .mcp.json\` to reset.`,
       );
     }
   }
@@ -175,7 +189,7 @@ function main() {
   }
 
   process.stdout.write(
-    `asymmetric-drift: OK (.mcp.json.example + .claude-plugin/plugin.json both pin args[0] to ${PLACEHOLDER}; plugin skills path is ${SKILLS_PATH}; runtime files present)\n`,
+    `asymmetric-drift: OK (.mcp.json.example pins ${formatServer(CANONICAL_EXAMPLE)}; .claude-plugin/plugin.json pins the fork npx form ${formatServer(CANONICAL_PLUGIN)}; skills path is ${SKILLS_PATH}; runtime files present)\n`,
   );
 }
 

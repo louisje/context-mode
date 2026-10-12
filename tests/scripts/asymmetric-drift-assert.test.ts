@@ -84,26 +84,34 @@ describe("Issue #531 — asymmetric-drift invariant", () => {
     expect(got, ".mcp.json.example missing or args[0] not a string").toBe(PLACEHOLDER);
   });
 
-  test(".claude-plugin/plugin.json args[0] is the ${CLAUDE_PLUGIN_ROOT}/start.mjs placeholder", () => {
-    const got = readArgs0(
-      resolve(ROOT, ".claude-plugin", "plugin.json"),
-      "context-mode",
-    );
-    expect(got, "plugin.json missing or args[0] not a string").toBe(PLACEHOLDER);
+  test(".claude-plugin/plugin.json pins the fork's npx launch form (marketplace installs)", () => {
+    // Fork intent (e09fcfb): plugin installs launch via `npx --yes
+    // louisje/context-mode` — always latest from GitHub, no
+    // CLAUDE_PLUGIN_ROOT resolution dependency. The contributor template
+    // (.mcp.json.example) intentionally keeps the local start.mjs form;
+    // the two files serve different audiences and MUST NOT be forced equal.
+    const pluginJson = JSON.parse(
+      readFileSync(resolve(ROOT, ".claude-plugin", "plugin.json"), "utf-8"),
+    ) as { mcpServers?: Record<string, { command?: string; args?: string[] }> };
+    const server = pluginJson.mcpServers?.["context-mode"];
+    expect(server?.command).toBe("npx");
+    expect(server?.args).toEqual(["--yes", "louisje/context-mode"]);
   });
 
-  test(".mcp.json.example args[0] EQUALS .claude-plugin/plugin.json args[0] (drift guard)", () => {
-    // Core architectural invariant. If the source-tracked template and the
-    // shipped Claude Code manifest ever drift, fresh installs break silently.
-    // This is the test-time mirror of scripts/assert-asymmetric-drift.mjs.
+  test("each manifest pins its own canonical launch form (drift guard)", () => {
+    // Fork asymmetry is intentional: the two files serve different
+    // audiences (contributors vs marketplace installs), so the upstream
+    // "both files must agree" rule is relaxed to "each file must match its
+    // own known-good form". Test-time mirror of
+    // scripts/assert-asymmetric-drift.mjs.
     const exampleArgs = readArgs0(resolve(ROOT, ".mcp.json.example"), "context-mode");
-    const pluginArgs = readArgs0(
-      resolve(ROOT, ".claude-plugin", "plugin.json"),
-      "context-mode",
-    );
-    expect(exampleArgs).not.toBeNull();
-    expect(pluginArgs).not.toBeNull();
-    expect(exampleArgs).toBe(pluginArgs);
+    expect(exampleArgs, ".mcp.json.example must keep the local start.mjs form").toBe(PLACEHOLDER);
+    const pluginJson = JSON.parse(
+      readFileSync(resolve(ROOT, ".claude-plugin", "plugin.json"), "utf-8"),
+    ) as { mcpServers?: Record<string, { command?: string; args?: string[] }> };
+    const server = pluginJson.mcpServers?.["context-mode"];
+    expect(server?.command, "plugin.json must keep the fork npx form").toBe("npx");
+    expect(server?.args).toEqual(["--yes", "louisje/context-mode"]);
   });
 
   test(".claude-plugin/plugin.json points skills at the shipped top-level skills directory (#658)", () => {
@@ -238,7 +246,7 @@ describe("Issue #531 — asymmetric-drift invariant", () => {
         JSON.stringify({
           name: "context-mode",
           skills: SKILLS_PATH,
-          mcpServers: { "context-mode": { command: "node", args: [PLACEHOLDER] } },
+          mcpServers: { "context-mode": { command: "npx", args: ["--yes", "louisje/context-mode"] } },
         }),
       );
       writeFileSync(join(scratch, "cli.bundle.mjs"), "");
