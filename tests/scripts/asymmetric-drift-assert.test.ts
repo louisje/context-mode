@@ -144,7 +144,11 @@ describe("Issue #531 — asymmetric-drift invariant", () => {
       r.status,
       `npm pack failed: status=${String(r.status)} signal=${String(r.signal)} error=${spawnErr} stderr=${String(r.stderr)} stdout=${String(r.stdout)}`,
     ).toBe(0);
-    const pack = JSON.parse(r.stdout) as Array<{ files: Array<{ path: string }> }>;
+    // npm >=10 回傳以套件名為 key 的物件；舊版回傳陣列——兩種形狀都接受。
+    const parsed = JSON.parse(r.stdout) as
+      | Array<{ files: Array<{ path: string }> }>
+      | Record<string, { files: Array<{ path: string }> }>;
+    const pack = Array.isArray(parsed) ? parsed : Object.values(parsed);
     const files = new Set(pack[0]?.files?.map((f) => f.path) ?? []);
     expect(files).toContain(".claude-plugin/plugin.json");
     for (const rel of REQUIRED_PLUGIN_RUNTIME_FILES) {

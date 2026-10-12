@@ -29,7 +29,10 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..", "..");
 const startSrc = readFileSync(resolve(ROOT, "start.mjs"), "utf-8");
 
-describe("start.mjs — Issue #523 Layer 5b plugin.json mcpServers heal", () => {
+// fork: self-heal 自動化已在 20c0fea 移除（user 自行管理 plugin cache 路徑，
+// 不讓 plugin 每次啟動改寫自己的安裝狀態）——這些接線在本 fork 刻意不存在。
+// skip 而不刪，保留與上游的對照。
+describe.skip("start.mjs — Issue #523 Layer 5b plugin.json mcpServers heal", () => {
   test("imports healPluginJsonMcpServers from the shared module", () => {
     expect(startSrc).toContain("healPluginJsonMcpServers");
     // Must import from the single source of truth.
@@ -104,7 +107,7 @@ describe("start.mjs — Issue #523 Layer 5b plugin.json mcpServers heal", () => 
 //   them into a fresh version dir on the next /ctx-upgrade cycle.
 // ─────────────────────────────────────────────────────────────────────────
 
-describe("start.mjs — Issue #609 sweep stale .mcp.json", () => {
+describe.skip("start.mjs — Issue #609 sweep stale .mcp.json", () => {
   test("imports sweepStaleMcpJson from the shared module", () => {
     expect(startSrc).toContain("sweepStaleMcpJson");
     expect(startSrc).toMatch(/heal-installed-plugins\.mjs/);
@@ -215,7 +218,9 @@ describe("start.mjs — Issue #577 CLAUDE_CONFIG_DIR honoring", () => {
     );
   });
 
-  test("settings.json registration path is derived from the resolved config dir", () => {
+  // fork: settings.json SessionStart 註冊已停用（20c0fea）——「Register the hook」
+  // 區塊在本 fork 刻意不存在。
+  test.skip("settings.json registration path is derived from the resolved config dir", () => {
     // The "Register the hook" block must compute settingsPath via the
     // resolved config dir, not via a hardcoded literal.
     const idx = startSrc.indexOf("Register the hook");

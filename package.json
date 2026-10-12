@@ -4,7 +4,9 @@
   "type": "module",
   "description": "MCP plugin that saves 98% of your context window. Works with Claude Code, Gemini CLI, VS Code Copilot, OpenCode, and Codex CLI. Sandboxed code execution, FTS5 knowledge base, and intent-driven search. Fork of mksglu/context-mode, maintained by louisje.",
   "author": "Mert Koseoğlu",
-  "contributors": ["louisje"],
+  "contributors": [
+    "louisje"
+  ],
   "license": "Elastic-2.0",
   "keywords": [
     "mcp",
@@ -127,5 +129,8 @@
   "packageManager": "pnpm@10.23.0+sha512.21c4e5698002ade97e4efe8b8b4a89a8de3c85a37919f957e7a0f30f38fbc5bbdd05980ffe29179b2fb6e6e691242e098d945d1601772cad0fef5fb6411e2a4b",
   "engines": {
     "node": ">=22.5.0"
+  },
+  "allowScripts": {
+    "better-sqlite3@12.11.1": true
   }
 }

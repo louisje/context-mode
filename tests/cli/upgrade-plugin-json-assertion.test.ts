@@ -33,7 +33,9 @@ const upgradeIdx = cliSrc.indexOf("async function upgrade");
 // inspection windows below.
 const upgradeBody = cliSrc.slice(upgradeIdx, upgradeIdx + 20000);
 
-describe("cli.ts upgrade() — Issue #523 plugin.json placeholder assertion", () => {
+// fork: cli.ts 的 upgrade() 已移除（no tool self-overwrite from remote 原則，
+// 見 src/server.ts 頂部註解）——這些斷言的目標程式碼在本 fork 刻意不存在。
+describe.skip("cli.ts upgrade() — Issue #523 plugin.json placeholder assertion", () => {
   test("post-bump block invokes healPluginJsonMcpServers from the shared module", () => {
     // The post-write assertion block (registry consistency) is the right
     // anchor — Layer 5 heal must run AFTER updatePluginRegistry so the

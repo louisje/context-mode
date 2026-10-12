@@ -27,10 +27,9 @@
   ],
   "mcpServers": {
     "context-mode": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "--yes",
-        "louisje/context-mode"
+        "${CLAUDE_PLUGIN_ROOT}/start.mjs"
       ]
     }
   },
